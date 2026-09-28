@@ -1,3 +1,11 @@
 .table-action { border: 0; border-radius: 7px; padding: 7px 9px; color: #1f6258; background: #e8f3ef; font: inherit; font-size: 12px; font-weight: 800; cursor: pointer; white-space: nowrap; }
 .table-action:hover { background: #d5ebe3; }
 .muted { color: #7a8b86; font-size: 12px; }
+.file-input { display: inline-flex; align-items: center; cursor: pointer; }
+.file-input input { display: none; }
+.badge.priority-alta { color: #a23838; background: #fde8e8; }
+.badge.priority-media { color: #98620d; background: #fff2d9; }
+.badge.priority-baixa { color: #2d6c5d; background: #e5f4ee; }
+.badge.maintenance-concluida { color: #237246; background: #e6f5eb; }
+.badge.maintenance-em-andamento { color: #315f9e; background: #e9f0ff; }
+.badge.maintenance-aberta { color: #98620d; background: #fff2d9; }
