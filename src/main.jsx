@@ -1,8 +1,9 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
 import './mobile.css';
 import './components.css';
+import './functional.css';
 
 const initialUnits = Array.from({ length: 12 }, (_, index) => ({
   id: index + 1,
@@ -45,12 +46,28 @@ const dateToIso = (date) => {
   return `${year}-${month}-${day}`;
 };
 const inRange = (date, start, end) => (!start || date >= start) && (!end || date <= end);
+const todayDisplay = () => new Intl.DateTimeFormat('pt-BR').format(new Date());
+
+function useStoredState(key, initialValue) {
+  const [value, setValue] = useState(() => {
+    try {
+      const stored = window.localStorage.getItem(key);
+      return stored ? JSON.parse(stored) : initialValue;
+    } catch {
+      return initialValue;
+    }
+  });
+  useEffect(() => {
+    window.localStorage.setItem(key, JSON.stringify(value));
+  }, [key, value]);
+  return [value, setValue];
+}
 
 function App() {
   const [page, setPage] = useState('Visão geral');
-  const [charges, setCharges] = useState(initialCharges);
-  const [expenses, setExpenses] = useState(initialExpenses);
-  const [bank, setBank] = useState(bankItems);
+  const [charges, setCharges] = useStoredState('cb-gestao:cobrancas', initialCharges);
+  const [expenses, setExpenses] = useStoredState('cb-gestao:despesas', initialExpenses);
+  const [bank, setBank] = useStoredState('cb-gestao:extrato', bankItems);
   const [notice, setNotice] = useState('');
   const [showChargeForm, setShowChargeForm] = useState(false);
   const [showExpenseForm, setShowExpenseForm] = useState(false);
@@ -74,6 +91,11 @@ function App() {
   const confirmBankItem = (id) => {
     setBank((items) => items.map((item) => item.id === id ? { ...item, state: 'Conciliada' } : item));
     inform('Conciliação confirmada. A ação ficará auditável na versão com banco de dados.');
+  };
+
+  const registerReceipt = (id) => {
+    setCharges((items) => items.map((item) => item.id === id ? { ...item, status: 'Pago', paidAt: todayDisplay() } : item));
+    inform('Recebimento registrado. O valor já compõe o resultado de caixa.');
   };
 
   const addCharge = (event) => {
@@ -109,7 +131,7 @@ function App() {
       {page === 'Visão geral' && <Dashboard income={income} expenses={paidExpenses} openCharges={openCharges} occupancy={occupancy} navigate={navigate} />}
       {page === 'Unidades' && <Units />}
       {page === 'Contratos' && <Contracts />}
-      {page === 'Cobranças' && <Charges items={charges} openForm={() => setShowChargeForm(true)} form={showChargeForm && <ChargeForm onClose={() => setShowChargeForm(false)} onSubmit={addCharge} />} />}
+      {page === 'Cobranças' && <Charges items={charges} registerReceipt={registerReceipt} openForm={() => setShowChargeForm(true)} form={showChargeForm && <ChargeForm onClose={() => setShowChargeForm(false)} onSubmit={addCharge} />} />}
       {page === 'Conciliação' && <Reconciliation items={bank} confirm={confirmBankItem} inform={inform} />}
       {page === 'Despesas' && <Expenses items={expenses} openForm={() => setShowExpenseForm(true)} form={showExpenseForm && <ExpenseForm onClose={() => setShowExpenseForm(false)} onSubmit={addExpense} />} />}
       {page === 'Relatórios' && <Reports charges={charges} expenses={expenses} units={initialUnits} />}
@@ -143,10 +165,10 @@ function Units() { return <section className="card"><div className="card-title">
 
 function Contracts() { const active = initialUnits.filter((unit) => unit.status === 'Ocupada'); return <section className="card"><div className="card-title"><div><p className="eyebrow">CONTRATOS</p><h2>Contratos ativos</h2></div><button className="solid-small">Novo contrato</button></div><Table headers={['Unidade', 'Inquilino', 'Início', 'Aluguel', 'Situação']} rows={active.map((unit) => [unit.name, unit.tenant, '2026', money(unit.rent), <span className="badge pago">Ativo</span>])} /></section>; }
 
-function Charges({ items, openForm, form }) {
+function Charges({ items, registerReceipt, openForm, form }) {
   const [filters, setFilters] = useState({ start: '', end: '', tenant: '' });
   const filtered = items.filter((item) => inRange(dateToIso(item.due), filters.start, filters.end) && (!filters.tenant || item.tenant === filters.tenant));
-  return <>{form}<section className="card"><div className="card-title"><div><p className="eyebrow">ALUGUÉIS · SET/2026</p><h2>Cobranças</h2></div><button className="solid-small" onClick={openForm}>Nova cobrança</button></div><FilterBar filters={filters} setFilters={setFilters} tenants={items.map((item) => item.tenant)} /><p className="filter-result">{filtered.length} cobrança(s) encontrada(s)</p><Table headers={['Unidade', 'Inquilino', 'Vencimento', 'Valor', 'Situação', 'Recebimento']} rows={filtered.map((item) => [item.unit, item.tenant, item.due, money(item.amount), <span className={`badge ${statusClass(item.status)}`}>{item.status}</span>, item.paidAt || '—'])} /></section></>;
+  return <>{form}<section className="card"><div className="card-title"><div><p className="eyebrow">ALUGUÉIS · SET/2026</p><h2>Cobranças</h2></div><button className="solid-small" onClick={openForm}>Nova cobrança</button></div><FilterBar filters={filters} setFilters={setFilters} tenants={items.map((item) => item.tenant)} /><p className="filter-result">{filtered.length} cobrança(s) encontrada(s)</p><Table headers={['Unidade', 'Inquilino', 'Vencimento', 'Valor', 'Situação', 'Recebimento', 'Ação']} rows={filtered.map((item) => [item.unit, item.tenant, item.due, money(item.amount), <span className={`badge ${statusClass(item.status)}`}>{item.status}</span>, item.paidAt || '—', item.status === 'Pago' ? <span className="muted">Confirmado</span> : <button className="table-action" onClick={() => registerReceipt(item.id)}>Registrar recebimento</button>])} /></section></>;
 }
 
 function Reconciliation({ items, confirm, inform }) { return <section className="card"><div className="card-title"><div><p className="eyebrow">BANCO INTER</p><h2>Conciliação bancária</h2><small>Protótipo: a importação de arquivo real será implementada com revisão antes da gravação.</small></div><button className="solid-small" onClick={() => inform('Nesta tela será aberto o importador CSV/OFX após validarmos o formato do extrato do Inter.')}>Selecionar extrato</button></div><div className="reconciliation-list">{items.map((item) => <article className="bank-row" key={item.id}><div className={`direction ${item.direction === 'Crédito' ? 'credit' : 'debit'}`}>{item.direction === 'Crédito' ? '↓' : '↑'}</div><div className="bank-main"><b>{item.description}</b><small>{item.date} · {item.direction}</small></div><div className="suggestion">{item.suggestion ? <><small>Sugestão</small><b>{item.suggestion}</b></> : <span className="badge pendente">Sem sugestão</span>}</div><div className="right"><b>{money(item.amount)}</b><span className={`badge ${statusClass(item.state)}`}>{item.state}</span></div>{item.state === 'Sugerida' && <button className="solid-small" onClick={() => confirm(item.id)}>Confirmar</button>}</article>)}</div></section>; }
