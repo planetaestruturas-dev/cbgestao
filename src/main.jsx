@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
 import './mobile.css';
+import './components.css';
 
 const initialUnits = Array.from({ length: 12 }, (_, index) => ({
   id: index + 1,
@@ -39,6 +40,11 @@ const bankItems = [
 
 const money = (value) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const statusClass = (status) => status.toLowerCase().replaceAll(' ', '-').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+const dateToIso = (date) => {
+  const [day, month, year] = date.split('/');
+  return `${year}-${month}-${day}`;
+};
+const inRange = (date, start, end) => (!start || date >= start) && (!end || date <= end);
 
 function App() {
   const [page, setPage] = useState('Visão geral');
@@ -93,7 +99,7 @@ function App() {
   const menu = ['Visão geral', 'Unidades', 'Contratos', 'Cobranças', 'Conciliação', 'Despesas', 'Relatórios'];
   return <div className="app-shell">
     <aside className="sidebar">
-      <div className="brand"><span className="brand-mark">CB</span><span>Gestão<br /><b>Kitnets</b></span></div>
+      <div className="brand"><img src="/logo-cb.png" alt="CB Gestão" /></div>
       <nav>{menu.map((item) => <button className={page === item ? 'nav-item active' : 'nav-item'} key={item} onClick={() => navigate(item)}>{item}</button>)}</nav>
       <div className="sidebar-bottom"><span className="avatar">F</span><div><b>Fabi</b><small>Administrador</small></div></div>
     </aside>
@@ -106,7 +112,7 @@ function App() {
       {page === 'Cobranças' && <Charges items={charges} openForm={() => setShowChargeForm(true)} form={showChargeForm && <ChargeForm onClose={() => setShowChargeForm(false)} onSubmit={addCharge} />} />}
       {page === 'Conciliação' && <Reconciliation items={bank} confirm={confirmBankItem} inform={inform} />}
       {page === 'Despesas' && <Expenses items={expenses} openForm={() => setShowExpenseForm(true)} form={showExpenseForm && <ExpenseForm onClose={() => setShowExpenseForm(false)} onSubmit={addExpense} />} />}
-      {page === 'Relatórios' && <Reports income={income} expenses={paidExpenses} units={initialUnits} />}
+      {page === 'Relatórios' && <Reports charges={charges} expenses={expenses} units={initialUnits} />}
     </main>
   </div>;
 }
@@ -137,13 +143,36 @@ function Units() { return <section className="card"><div className="card-title">
 
 function Contracts() { const active = initialUnits.filter((unit) => unit.status === 'Ocupada'); return <section className="card"><div className="card-title"><div><p className="eyebrow">CONTRATOS</p><h2>Contratos ativos</h2></div><button className="solid-small">Novo contrato</button></div><Table headers={['Unidade', 'Inquilino', 'Início', 'Aluguel', 'Situação']} rows={active.map((unit) => [unit.name, unit.tenant, '2026', money(unit.rent), <span className="badge pago">Ativo</span>])} /></section>; }
 
-function Charges({ items, openForm, form }) { return <>{form}<section className="card"><div className="card-title"><div><p className="eyebrow">ALUGUÉIS · SET/2026</p><h2>Cobranças</h2></div><button className="solid-small" onClick={openForm}>Nova cobrança</button></div><Table headers={['Unidade', 'Inquilino', 'Vencimento', 'Valor', 'Situação', 'Recebimento']} rows={items.map((item) => [item.unit, item.tenant, item.due, money(item.amount), <span className={`badge ${statusClass(item.status)}`}>{item.status}</span>, item.paidAt || '—'])} /></section></>; }
+function Charges({ items, openForm, form }) {
+  const [filters, setFilters] = useState({ start: '', end: '', tenant: '' });
+  const filtered = items.filter((item) => inRange(dateToIso(item.due), filters.start, filters.end) && (!filters.tenant || item.tenant === filters.tenant));
+  return <>{form}<section className="card"><div className="card-title"><div><p className="eyebrow">ALUGUÉIS · SET/2026</p><h2>Cobranças</h2></div><button className="solid-small" onClick={openForm}>Nova cobrança</button></div><FilterBar filters={filters} setFilters={setFilters} tenants={items.map((item) => item.tenant)} /><p className="filter-result">{filtered.length} cobrança(s) encontrada(s)</p><Table headers={['Unidade', 'Inquilino', 'Vencimento', 'Valor', 'Situação', 'Recebimento']} rows={filtered.map((item) => [item.unit, item.tenant, item.due, money(item.amount), <span className={`badge ${statusClass(item.status)}`}>{item.status}</span>, item.paidAt || '—'])} /></section></>;
+}
 
 function Reconciliation({ items, confirm, inform }) { return <section className="card"><div className="card-title"><div><p className="eyebrow">BANCO INTER</p><h2>Conciliação bancária</h2><small>Protótipo: a importação de arquivo real será implementada com revisão antes da gravação.</small></div><button className="solid-small" onClick={() => inform('Nesta tela será aberto o importador CSV/OFX após validarmos o formato do extrato do Inter.')}>Selecionar extrato</button></div><div className="reconciliation-list">{items.map((item) => <article className="bank-row" key={item.id}><div className={`direction ${item.direction === 'Crédito' ? 'credit' : 'debit'}`}>{item.direction === 'Crédito' ? '↓' : '↑'}</div><div className="bank-main"><b>{item.description}</b><small>{item.date} · {item.direction}</small></div><div className="suggestion">{item.suggestion ? <><small>Sugestão</small><b>{item.suggestion}</b></> : <span className="badge pendente">Sem sugestão</span>}</div><div className="right"><b>{money(item.amount)}</b><span className={`badge ${statusClass(item.state)}`}>{item.state}</span></div>{item.state === 'Sugerida' && <button className="solid-small" onClick={() => confirm(item.id)}>Confirmar</button>}</article>)}</div></section>; }
 
-function Expenses({ items, openForm, form }) { return <>{form}<section className="card"><div className="card-title"><div><p className="eyebrow">PAGAMENTOS E MANUTENÇÃO</p><h2>Despesas</h2></div><button className="solid-small" onClick={openForm}>Lançar despesa</button></div><Table headers={['Data', 'Descrição', 'Fornecedor', 'Referência', 'Categoria', 'Valor', 'Situação']} rows={items.map((item) => [item.date, item.description, item.supplier, item.unit, item.category, money(item.amount), <span className={`badge ${statusClass(item.status)}`}>{item.status}</span>])} /></section></>; }
+function Expenses({ items, openForm, form }) {
+  const [filters, setFilters] = useState({ start: '', end: '', category: '' });
+  const filtered = items.filter((item) => inRange(dateToIso(item.date), filters.start, filters.end) && (!filters.category || item.category === filters.category));
+  return <>{form}<section className="card"><div className="card-title"><div><p className="eyebrow">PAGAMENTOS E MANUTENÇÃO</p><h2>Despesas</h2></div><button className="solid-small" onClick={openForm}>Lançar despesa</button></div><FilterBar filters={filters} setFilters={setFilters} categories={items.map((item) => item.category)} /><p className="filter-result">{filtered.length} despesa(s) encontrada(s) · {money(filtered.reduce((total, item) => total + item.amount, 0))}</p><Table headers={['Data', 'Descrição', 'Fornecedor', 'Referência', 'Categoria', 'Valor', 'Situação']} rows={filtered.map((item) => [item.date, item.description, item.supplier, item.unit, item.category, money(item.amount), <span className={`badge ${statusClass(item.status)}`}>{item.status}</span>])} /></section></>;
+}
 
-function Reports({ income, expenses, units }) { const byUnit = units.filter((unit) => unit.rent).map((unit) => ({ ...unit, result: unit.rent - (unit.id === 3 ? 180 : 0) })); return <><section className="metric-grid"><Metric label="Aluguel recebido" value={money(income)} hint="Base caixa" tone="green" /><Metric label="Despesas pagas" value={money(expenses)} hint="Base caixa" tone="orange" /><Metric label="Resultado do mês" value={money(income - expenses)} hint="Cauções excluídas" tone="blue" /><Metric label="Em aberto" value={money(1200)} hint="2 cobranças" tone="purple" /></section><section className="card"><div className="card-title"><div><p className="eyebrow">SETEMBRO DE 2026</p><h2>Resultado por unidade</h2></div><button className="plain-small">Exportar CSV</button></div><Table headers={['Unidade', 'Aluguel previsto', 'Manutenção', 'Resultado']} rows={byUnit.map((unit) => [unit.name, money(unit.rent), money(unit.id === 3 ? 180 : 0), money(unit.result)])} /></section></>; }
+function Reports({ charges, expenses, units }) {
+  const [filters, setFilters] = useState({ start: '', end: '', tenant: '', category: '' });
+  const filteredCharges = charges.filter((item) => inRange(dateToIso(item.paidAt || item.due), filters.start, filters.end) && (!filters.tenant || item.tenant === filters.tenant));
+  const filteredExpenses = expenses.filter((item) => inRange(dateToIso(item.date), filters.start, filters.end) && (!filters.category || item.category === filters.category));
+  const income = filteredCharges.filter((item) => item.status === 'Pago').reduce((total, item) => total + item.amount, 0);
+  const expenseTotal = filteredExpenses.reduce((total, item) => total + item.amount, 0);
+  const openTotal = filteredCharges.filter((item) => item.status !== 'Pago').reduce((total, item) => total + item.amount, 0);
+  const reportUnits = units.filter((unit) => unit.rent && (!filters.tenant || filteredCharges.some((charge) => charge.unit === unit.name)));
+  return <><section className="card report-filter"><div className="card-title"><div><p className="eyebrow">ANÁLISE FINANCEIRA</p><h2>Filtros do relatório</h2></div></div><FilterBar filters={filters} setFilters={setFilters} tenants={charges.map((item) => item.tenant)} categories={expenses.map((item) => item.category)} /></section><section className="metric-grid"><Metric label="Aluguel recebido" value={money(income)} hint="Base caixa" tone="green" /><Metric label="Despesas pagas" value={money(expenseTotal)} hint="Base caixa" tone="orange" /><Metric label="Resultado do mês" value={money(income - expenseTotal)} hint="Cauções excluídas" tone="blue" /><Metric label="Em aberto" value={money(openTotal)} hint={`${filteredCharges.filter((item) => item.status !== 'Pago').length} cobrança(s)`} tone="purple" /></section><section className="card"><div className="card-title"><div><p className="eyebrow">SETEMBRO DE 2026</p><h2>Resultado por unidade</h2></div><button className="plain-small">Exportar CSV</button></div><Table headers={['Unidade', 'Aluguel previsto', 'Manutenção', 'Resultado']} rows={reportUnits.map((unit) => { const maintenance = filteredExpenses.filter((item) => item.unit === unit.name).reduce((total, item) => total + item.amount, 0); return [unit.name, money(unit.rent), money(maintenance), money(unit.rent - maintenance)]; })} /></section></>;
+}
+
+function FilterBar({ filters, setFilters, tenants = [], categories = [] }) {
+  const update = (key, value) => setFilters({ ...filters, [key]: value });
+  const unique = (values) => [...new Set(values)].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  return <div className="filter-bar"><label>De<input type="date" value={filters.start} onChange={(event) => update('start', event.target.value)} /></label><label>Até<input type="date" value={filters.end} onChange={(event) => update('end', event.target.value)} /></label>{tenants.length > 0 && <label>Inquilino<select value={filters.tenant || ''} onChange={(event) => update('tenant', event.target.value)}><option value="">Todos</option>{unique(tenants).map((tenant) => <option key={tenant}>{tenant}</option>)}</select></label>}{categories.length > 0 && <label>Categoria<select value={filters.category || ''} onChange={(event) => update('category', event.target.value)}><option value="">Todas</option>{unique(categories).map((category) => <option key={category}>{category}</option>)}</select></label>}<button className="clear-filter" type="button" onClick={() => setFilters({ start: '', end: '', tenant: '', category: '' })}>Limpar filtros</button></div>;
+}
 
 function Table({ headers, rows }) { return <div className="table-wrap"><table><thead><tr>{headers.map((header) => <th key={header}>{header}</th>)}</tr></thead><tbody>{rows.map((row, index) => <tr key={index}>{row.map((cell, cellIndex) => <td key={cellIndex}>{cell}</td>)}</tr>)}</tbody></table></div>; }
 
