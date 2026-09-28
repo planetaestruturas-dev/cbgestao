@@ -4,6 +4,7 @@ import './styles.css';
 import './mobile.css';
 import './components.css';
 import './functional.css';
+import { parseStatementCsv } from './statementParser.js';
 
 const initialUnits = Array.from({ length: 12 }, (_, index) => ({
   id: index + 1,
@@ -65,30 +66,6 @@ const dateToIso = (date) => {
 };
 const inRange = (date, start, end) => (!start || date >= start) && (!end || date <= end);
 const todayDisplay = () => new Intl.DateTimeFormat('pt-BR').format(new Date());
-const normalizeHeader = (value) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
-const parseBrazilianAmount = (value) => {
-  const cleaned = String(value || '').replace(/[^0-9,.-]/g, '').trim();
-  if (!cleaned) return 0;
-  const normalized = cleaned.includes(',') ? cleaned.replaceAll('.', '').replace(',', '.') : cleaned;
-  return Number(normalized) || 0;
-};
-const parseStatementCsv = (text) => {
-  const lines = text.split(/\r?\n/).filter((line) => line.trim());
-  if (lines.length < 2) throw new Error('O arquivo precisa ter cabeçalho e ao menos uma transação.');
-  const separator = (lines[0].match(/;/g) || []).length >= (lines[0].match(/,/g) || []).length ? ';' : ',';
-  const headers = lines[0].split(separator).map(normalizeHeader);
-  const findColumn = (...names) => headers.findIndex((header) => names.some((name) => header.includes(name)));
-  const dateIndex = findColumn('data');
-  const descriptionIndex = findColumn('descricao', 'historico', 'lancamento', 'nome');
-  const amountIndex = findColumn('valor', 'amount');
-  if (dateIndex === -1 || amountIndex === -1) throw new Error('Não encontrei as colunas Data e Valor no arquivo.');
-  return lines.slice(1).map((line, index) => {
-    const columns = line.split(separator).map((value) => value.trim().replace(/^"|"$/g, ''));
-    const rawAmount = parseBrazilianAmount(columns[amountIndex]);
-    const description = descriptionIndex === -1 ? 'Transação importada' : columns[descriptionIndex] || 'Transação importada';
-    return { id: `csv-${Date.now()}-${index}`, date: columns[dateIndex], description, amount: Math.abs(rawAmount), direction: rawAmount >= 0 ? 'Crédito' : 'Débito', suggestion: null, state: 'Pendente', imported: true };
-  }).filter((item) => item.amount > 0);
-};
 
 function useStoredState(key, initialValue) {
   const [value, setValue] = useState(() => {

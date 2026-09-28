@@ -2,13 +2,13 @@
 
 ## Estratégia inicial para Banco Inter
 
-A primeira versão aceitará arquivos exportados pelo usuário a partir da conta do Banco Inter. O formato efetivamente suportado será definido por arquivos reais de exemplo, antes da implementação. A interface deve aceitar CSV e OFX caso disponíveis e mostrar um mapeamento de colunas para novos layouts.
+A primeira versão aceita o CSV exportado pelo usuário a partir da conta do Banco Inter. O formato foi validado com um extrato real que contém linhas iniciais de identificação da conta e, em seguida, o cabeçalho `Data Lançamento`, `Histórico`, `Descrição`, `Valor` e `Saldo`. O importador ignora os metadados iniciais e usa as cinco colunas financeiras. OFX poderá ser incluído em fase posterior.
 
 Não serão armazenadas senha, token, certificado ou credenciais bancárias. A integração direta, se desejada depois, será um projeto separado sujeito à disponibilidade de API, autorização da conta e revisão de segurança.
 
 ## Fluxo de importação
 
-1. O gestor seleciona o arquivo e informa a conta bancária.
+1. O gestor seleciona o CSV de extrato da conta.
 2. O sistema valida formato, período, colunas e valores.
 3. O sistema cria uma prévia: registros novos, possíveis duplicados e linhas com erro.
 4. O gestor confirma a importação.
