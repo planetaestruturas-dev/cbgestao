@@ -45,6 +45,21 @@ const initialMaintenances = [
   { id: 2, openedAt: '11/09/2026', title: 'Revisão da iluminação externa', unit: 'Área comum', priority: 'Média', status: 'Em andamento', supplier: 'Casa Elétrica', estimated: 300, actual: 245.5 },
 ];
 
+const initialTenants = [
+  'Lívia Vieira', 'Pedro Antônio', 'Wesley Costa', 'João Pedro', 'Paulo Roberto', 'Gilselly Landim', 'Rita Barbosa', 'João Victor', 'Antônio Maurício', 'Maria Ludiane',
+].map((name, index) => ({ id: index + 1, name, cpf: '', phone: '', email: '', status: 'Ativo' }));
+
+const initialBankAccounts = [
+  { id: 1, bank: 'Banco Inter', account: '•••• 3528', type: 'Conta corrente', status: 'Ativa' },
+];
+
+const initialExpenseCategories = [
+  { id: 1, name: 'Manutenção', description: 'Reparos, conservação e melhorias', status: 'Ativa' },
+  { id: 2, name: 'Serviços', description: 'Limpeza, mão de obra e serviços recorrentes', status: 'Ativa' },
+  { id: 3, name: 'Material', description: 'Materiais de consumo e reparo', status: 'Ativa' },
+  { id: 4, name: 'Utilidades', description: 'Água, energia, internet e similares', status: 'Ativa' },
+];
+
 const initialExpenses = [
   { id: 1, date: '04/09/2026', description: 'Reparo hidráulico', supplier: 'José Encanador', unit: 'Kitnet 03', category: 'Manutenção', amount: 180, status: 'Conciliada' },
   { id: 2, date: '12/09/2026', description: 'Materiais elétricos', supplier: 'Casa Elétrica', unit: 'Área comum', category: 'Manutenção', amount: 245.5, status: 'Pendente' },
@@ -89,11 +104,15 @@ function App() {
   const [bank, setBank] = useStoredState('cb-gestao:extrato', bankItems);
   const [contracts, setContracts] = useStoredState('cb-gestao:contratos', initialContracts);
   const [maintenances, setMaintenances] = useStoredState('cb-gestao:manutencoes', initialMaintenances);
+  const [tenants, setTenants] = useStoredState('cb-gestao:inquilinos', initialTenants);
+  const [bankAccounts, setBankAccounts] = useStoredState('cb-gestao:contas-bancarias', initialBankAccounts);
+  const [expenseCategories, setExpenseCategories] = useStoredState('cb-gestao:categorias-despesa', initialExpenseCategories);
   const [notice, setNotice] = useState('');
   const [showChargeForm, setShowChargeForm] = useState(false);
   const [showExpenseForm, setShowExpenseForm] = useState(false);
   const [showContractForm, setShowContractForm] = useState(false);
   const [showMaintenanceForm, setShowMaintenanceForm] = useState(false);
+  const [registrationForm, setRegistrationForm] = useState('');
 
   const income = useMemo(() => charges.filter((item) => item.status === 'Pago').reduce((sum, item) => sum + item.amount, 0), [charges]);
   const paidExpenses = useMemo(() => expenses.reduce((sum, item) => sum + item.amount, 0), [expenses]);
@@ -173,7 +192,31 @@ function App() {
     inform('Manutenção registrada. Você poderá associar a despesa quando ela for paga.');
   };
 
-  const menu = ['Visão geral', 'Unidades', 'Contratos', 'Cobranças', 'Conciliação', 'Despesas', 'Manutenções', 'Relatórios'];
+  const addTenant = (event) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    setTenants((items) => [...items, { id: Date.now(), name: form.get('name'), cpf: form.get('cpf'), phone: form.get('phone'), email: form.get('email'), status: 'Ativo' }]);
+    setRegistrationForm('');
+    inform('Inquilino cadastrado localmente.');
+  };
+
+  const addBankAccount = (event) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    setBankAccounts((items) => [...items, { id: Date.now(), bank: form.get('bank'), account: form.get('account'), type: form.get('type'), status: 'Ativa' }]);
+    setRegistrationForm('');
+    inform('Conta bancária cadastrada.');
+  };
+
+  const addExpenseCategory = (event) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    setExpenseCategories((items) => [...items, { id: Date.now(), name: form.get('name'), description: form.get('description'), status: 'Ativa' }]);
+    setRegistrationForm('');
+    inform('Categoria de despesa cadastrada.');
+  };
+
+  const menu = ['Visão geral', 'Unidades', 'Contratos', 'Cobranças', 'Conciliação', 'Despesas', 'Manutenções', 'Cadastros', 'Relatórios'];
   return <div className="app-shell">
     <aside className="sidebar">
       <div className="brand"><img src="/logo-cb.png" alt="CB Gestão" /></div>
@@ -185,11 +228,12 @@ function App() {
       {notice && <div className="toast">{notice}</div>}
       {page === 'Visão geral' && <Dashboard income={income} expenses={paidExpenses} openCharges={openCharges} occupancy={occupancy} navigate={navigate} />}
       {page === 'Unidades' && <Units />}
-      {page === 'Contratos' && <Contracts items={contracts} openForm={() => setShowContractForm(true)} form={showContractForm && <ContractForm onClose={() => setShowContractForm(false)} onSubmit={addContract} />} />}
+      {page === 'Contratos' && <Contracts items={contracts} openForm={() => setShowContractForm(true)} form={showContractForm && <ContractForm tenants={tenants} onClose={() => setShowContractForm(false)} onSubmit={addContract} />} />}
       {page === 'Cobranças' && <Charges items={charges} registerReceipt={registerReceipt} openForm={() => setShowChargeForm(true)} form={showChargeForm && <ChargeForm onClose={() => setShowChargeForm(false)} onSubmit={addCharge} />} />}
       {page === 'Conciliação' && <Reconciliation items={bank} confirm={confirmBankItem} importStatement={importStatement} inform={inform} />}
-      {page === 'Despesas' && <Expenses items={expenses} openForm={() => setShowExpenseForm(true)} form={showExpenseForm && <ExpenseForm onClose={() => setShowExpenseForm(false)} onSubmit={addExpense} />} />}
+      {page === 'Despesas' && <Expenses items={expenses} openForm={() => setShowExpenseForm(true)} form={showExpenseForm && <ExpenseForm categories={expenseCategories} onClose={() => setShowExpenseForm(false)} onSubmit={addExpense} />} />}
       {page === 'Manutenções' && <Maintenances items={maintenances} openForm={() => setShowMaintenanceForm(true)} form={showMaintenanceForm && <MaintenanceForm onClose={() => setShowMaintenanceForm(false)} onSubmit={addMaintenance} />} />}
+      {page === 'Cadastros' && <Registrations tenants={tenants} bankAccounts={bankAccounts} categories={expenseCategories} openForm={setRegistrationForm} form={registrationForm === 'tenant' ? <TenantForm onClose={() => setRegistrationForm('')} onSubmit={addTenant} /> : registrationForm === 'account' ? <BankAccountForm onClose={() => setRegistrationForm('')} onSubmit={addBankAccount} /> : registrationForm === 'category' ? <ExpenseCategoryForm onClose={() => setRegistrationForm('')} onSubmit={addExpenseCategory} /> : null} />}
       {page === 'Relatórios' && <Reports charges={charges} expenses={expenses} units={initialUnits} />}
     </main>
   </div>;
@@ -237,6 +281,8 @@ function Expenses({ items, openForm, form }) {
 
 function Maintenances({ items, openForm, form }) { return <>{form}<section className="card"><div className="card-title"><div><p className="eyebrow">OPERAÇÃO DO PRÉDIO</p><h2>Manutenções</h2><small>Acompanhe solicitações, custo estimado e valor efetivamente gasto.</small></div><button className="solid-small" onClick={openForm}>Nova manutenção</button></div><Table headers={['Abertura', 'Solicitação', 'Referência', 'Prioridade', 'Fornecedor', 'Estimado', 'Real', 'Situação']} rows={items.map((item) => [item.openedAt, item.title, item.unit, <span className={`badge priority-${statusClass(item.priority)}`}>{item.priority}</span>, item.supplier, money(item.estimated), money(item.actual), <span className={`badge maintenance-${statusClass(item.status)}`}>{item.status}</span>])} /></section></>; }
 
+function Registrations({ tenants, bankAccounts, categories, openForm, form }) { return <>{form}<section className="registration-grid"><article className="card"><div className="card-title"><div><p className="eyebrow">PESSOAS</p><h2>Inquilinos</h2></div><button className="solid-small" onClick={() => openForm('tenant')}>Novo inquilino</button></div><Table headers={['Nome', 'CPF', 'Telefone', 'Situação']} rows={tenants.map((item) => [item.name, item.cpf || 'Não informado', item.phone || 'Não informado', <span className="badge pago">{item.status}</span>])} /></article><article className="card"><div className="card-title"><div><p className="eyebrow">FINANCEIRO</p><h2>Contas bancárias</h2></div><button className="solid-small" onClick={() => openForm('account')}>Nova conta</button></div><Table headers={['Banco', 'Conta', 'Tipo', 'Situação']} rows={bankAccounts.map((item) => [item.bank, item.account, item.type, <span className="badge pago">{item.status}</span>])} /></article><article className="card"><div className="card-title"><div><p className="eyebrow">FINANCEIRO</p><h2>Categorias de despesa</h2></div><button className="solid-small" onClick={() => openForm('category')}>Nova categoria</button></div><Table headers={['Categoria', 'Descrição', 'Situação']} rows={categories.map((item) => [item.name, item.description || 'Sem descrição', <span className="badge pago">{item.status}</span>])} /></article></section></>; }
+
 function Reports({ charges, expenses, units }) {
   const [filters, setFilters] = useState({ start: '', end: '', tenant: '', category: '' });
   const filteredCharges = charges.filter((item) => inRange(dateToIso(item.paidAt || item.due), filters.start, filters.end) && (!filters.tenant || item.tenant === filters.tenant));
@@ -258,8 +304,11 @@ function Table({ headers, rows }) { return <div className="table-wrap"><table><t
 
 function Modal({ title, children, onClose }) { return <div className="modal-backdrop"><section className="modal"><div className="modal-head"><h2>{title}</h2><button onClick={onClose}>×</button></div>{children}</section></div>; }
 function ChargeForm({ onClose, onSubmit }) { return <Modal title="Nova cobrança" onClose={onClose}><form onSubmit={onSubmit} className="form-grid"><label>Unidade<select name="unit" required>{initialUnits.map((unit) => <option key={unit.id}>{unit.name}</option>)}</select></label><label>Inquilino<input name="tenant" required placeholder="Nome do inquilino" /></label><label>Vencimento<input name="due" required placeholder="dd/mm/aaaa" /></label><label>Valor<input name="amount" required type="number" min="0" step="0.01" placeholder="0,00" /></label><div className="form-actions"><button type="button" className="plain-small" onClick={onClose}>Cancelar</button><button className="solid-small">Salvar cobrança</button></div></form></Modal>; }
-function ExpenseForm({ onClose, onSubmit }) { return <Modal title="Lançar despesa" onClose={onClose}><form onSubmit={onSubmit} className="form-grid"><label>Data<input name="date" required placeholder="dd/mm/aaaa" /></label><label>Valor<input name="amount" required type="number" min="0" step="0.01" placeholder="0,00" /></label><label className="full">Descrição<input name="description" required placeholder="O que foi pago?" /></label><label>Fornecedor ou pessoa<input name="supplier" required placeholder="Nome" /></label><label>Referência<select name="unit"><option>Área comum</option>{initialUnits.map((unit) => <option key={unit.id}>{unit.name}</option>)}</select></label><label>Categoria<select name="category"><option>Manutenção</option><option>Serviços</option><option>Material</option><option>Utilidades</option></select></label><div className="form-actions"><button type="button" className="plain-small" onClick={onClose}>Cancelar</button><button className="solid-small">Salvar despesa</button></div></form></Modal>; }
-function ContractForm({ onClose, onSubmit }) { return <Modal title="Novo contrato" onClose={onClose}><form onSubmit={onSubmit} className="form-grid"><label>Unidade<select name="unit" required>{initialUnits.map((unit) => <option key={unit.id}>{unit.name}</option>)}</select></label><label>Inquilino titular<input name="tenant" required placeholder="Nome completo" /></label><label>Início<input name="start" required placeholder="dd/mm/aaaa" /></label><label>Fim previsto<input name="end" required placeholder="dd/mm/aaaa" /></label><label>Aluguel mensal<input name="rent" required type="number" min="0" step="0.01" placeholder="0,00" /></label><div className="form-actions"><button type="button" className="plain-small" onClick={onClose}>Cancelar</button><button className="solid-small">Salvar contrato</button></div></form></Modal>; }
+function ExpenseForm({ categories, onClose, onSubmit }) { return <Modal title="Lançar despesa" onClose={onClose}><form onSubmit={onSubmit} className="form-grid"><label>Data<input name="date" required placeholder="dd/mm/aaaa" /></label><label>Valor<input name="amount" required type="number" min="0" step="0.01" placeholder="0,00" /></label><label className="full">Descrição<input name="description" required placeholder="O que foi pago?" /></label><label>Fornecedor ou pessoa<input name="supplier" required placeholder="Nome" /></label><label>Referência<select name="unit"><option>Área comum</option>{initialUnits.map((unit) => <option key={unit.id}>{unit.name}</option>)}</select></label><label>Categoria<select name="category">{categories.filter((item) => item.status === 'Ativa').map((item) => <option key={item.id}>{item.name}</option>)}</select></label><div className="form-actions"><button type="button" className="plain-small" onClick={onClose}>Cancelar</button><button className="solid-small">Salvar despesa</button></div></form></Modal>; }
+function ContractForm({ tenants, onClose, onSubmit }) { return <Modal title="Novo contrato" onClose={onClose}><form onSubmit={onSubmit} className="form-grid"><label>Unidade<select name="unit" required>{initialUnits.map((unit) => <option key={unit.id}>{unit.name}</option>)}</select></label><label>Inquilino titular<select name="tenant" required><option value="">Selecione</option>{tenants.filter((item) => item.status === 'Ativo').map((item) => <option key={item.id}>{item.name}</option>)}</select></label><label>Início<input name="start" required placeholder="dd/mm/aaaa" /></label><label>Fim previsto<input name="end" required placeholder="dd/mm/aaaa" /></label><label>Aluguel mensal<input name="rent" required type="number" min="0" step="0.01" placeholder="0,00" /></label><div className="form-actions"><button type="button" className="plain-small" onClick={onClose}>Cancelar</button><button className="solid-small">Salvar contrato</button></div></form></Modal>; }
 function MaintenanceForm({ onClose, onSubmit }) { return <Modal title="Nova manutenção" onClose={onClose}><form onSubmit={onSubmit} className="form-grid"><label>Data de abertura<input name="openedAt" required placeholder="dd/mm/aaaa" /></label><label>Referência<select name="unit"><option>Área comum</option>{initialUnits.map((unit) => <option key={unit.id}>{unit.name}</option>)}</select></label><label className="full">Solicitação<input name="title" required placeholder="Descreva o problema ou serviço" /></label><label>Prioridade<select name="priority"><option>Baixa</option><option>Média</option><option>Alta</option></select></label><label>Fornecedor ou responsável<input name="supplier" placeholder="A definir" /></label><label>Custo estimado<input name="estimated" type="number" min="0" step="0.01" placeholder="0,00" /></label><div className="form-actions"><button type="button" className="plain-small" onClick={onClose}>Cancelar</button><button className="solid-small">Salvar manutenção</button></div></form></Modal>; }
+function TenantForm({ onClose, onSubmit }) { return <Modal title="Novo inquilino" onClose={onClose}><form onSubmit={onSubmit} className="form-grid"><label className="full">Nome completo<input name="name" required placeholder="Nome do inquilino" /></label><label>CPF<input name="cpf" placeholder="000.000.000-00" /></label><label>Telefone<input name="phone" placeholder="(00) 00000-0000" /></label><label className="full">E-mail<input name="email" type="email" placeholder="nome@exemplo.com" /></label><div className="form-actions"><button type="button" className="plain-small" onClick={onClose}>Cancelar</button><button className="solid-small">Salvar inquilino</button></div></form></Modal>; }
+function BankAccountForm({ onClose, onSubmit }) { return <Modal title="Nova conta bancária" onClose={onClose}><form onSubmit={onSubmit} className="form-grid"><label>Banco<input name="bank" required placeholder="Nome do banco" /></label><label>Tipo<select name="type"><option>Conta corrente</option><option>Conta pagamento</option><option>Poupança</option></select></label><label className="full">Identificação da conta<input name="account" required placeholder="Agência e conta ou apelido" /></label><div className="form-actions"><button type="button" className="plain-small" onClick={onClose}>Cancelar</button><button className="solid-small">Salvar conta</button></div></form></Modal>; }
+function ExpenseCategoryForm({ onClose, onSubmit }) { return <Modal title="Nova categoria de despesa" onClose={onClose}><form onSubmit={onSubmit} className="form-grid"><label>Nome da categoria<input name="name" required placeholder="Ex.: Pintura" /></label><label className="full">Descrição<input name="description" placeholder="Quando esta categoria deve ser usada?" /></label><div className="form-actions"><button type="button" className="plain-small" onClick={onClose}>Cancelar</button><button className="solid-small">Salvar categoria</button></div></form></Modal>; }
 
 createRoot(document.getElementById('root')).render(<App />);

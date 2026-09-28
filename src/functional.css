@@ -3,6 +3,8 @@
 .muted { color: #7a8b86; font-size: 12px; }
 .file-input { display: inline-flex; align-items: center; cursor: pointer; }
 .file-input input { display: none; }
+.registration-grid { display: grid; gap: 2px; }
+.registration-grid .card { margin-bottom: 20px; }
 .badge.priority-alta { color: #a23838; background: #fde8e8; }
 .badge.priority-media { color: #98620d; background: #fff2d9; }
 .badge.priority-baixa { color: #2d6c5d; background: #e5f4ee; }
