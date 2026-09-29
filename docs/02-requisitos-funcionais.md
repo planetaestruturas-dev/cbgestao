@@ -39,8 +39,8 @@
 - RF-18: lançar despesa com data de inclusão, vencimento, data de pagamento quando quitada, valor, fornecedor ou beneficiário, descrição, categoria, forma de pagamento e comprovante.
 - RF-18.1: permitir editar e cancelar despesas sem exclusão física; despesas canceladas não compõem resultados e relatórios financeiros.
 - RF-19: vincular a despesa a uma kitnet, a área comum ou a múltiplas unidades por rateio documentado.
-- RF-20: registrar solicitação de manutenção, prioridade, status, responsável e datas, sem valores financeiros próprios.
-- RF-21: vincular uma ou mais despesas a uma manutenção aberta; o custo da manutenção será a soma das despesas vinculadas.
+- RF-20: registrar solicitação de manutenção, prioridade, status, responsável, datas e observações detalhadas, sem valores financeiros próprios.
+- RF-21: vincular uma ou mais despesas a uma manutenção aberta; o custo da manutenção será a soma das despesas vinculadas e seu relatório detalhará cada lançamento.
 - RF-22: conciliar a despesa com débito do extrato bancário ou marcar outro meio de pagamento.
 
 ## Painel e relatórios
