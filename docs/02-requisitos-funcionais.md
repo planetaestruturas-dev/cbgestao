@@ -52,3 +52,4 @@
 - RF-27: registrar auditoria de criação, edição, exclusão lógica, importação e conciliação.
 - RF-28: anexar documentos em armazenamento privado e limitar seu acesso aos usuários autorizados.
 - RF-29: realizar cópia de segurança diária do banco de dados e validar restauração periodicamente.
+- RF-30: formatar todos os campos monetários de entrada como Real brasileiro (`R$` e duas casas decimais), mantendo o valor numérico para cálculos e exportações.
