@@ -18,7 +18,7 @@
 - RF-09: mostrar situação da cobrança como `em aberto`, `parcial`, `paga`, `vencida`, `cancelada` ou `renegociada`.
 - RF-10: avisar sobre contratos próximos do fim e cobranças vencidas.
 - RF-10.1: permitir registrar distrato dentro do período contratado, encerrar o contrato e cancelar as cobranças futuras ainda em aberto.
-- RF-10.2: calcular a multa rescisória proporcionalmente ao prazo restante: `aluguel mensal × multiplicador contratual × dias restantes / total de dias do contrato`; o multiplicador e o valor final da multa devem ser editáveis e a cobrança da multa deve ficar registrada.
+- RF-10.2: calcular a multa rescisória proporcionalmente ao prazo restante: `aluguel mensal × multiplicador contratual × dias restantes / total de dias do contrato`; o multiplicador e o valor final da multa devem ser editáveis e a cobrança da multa deve ficar registrada com vencimento definido no distrato.
 - RF-10.3: manter o contrato de aluguel anexado ao histórico do inquilino, com acesso controlado na implantação com banco de dados.
 
 ## Banco Inter e conciliação
