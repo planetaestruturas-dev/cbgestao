@@ -590,8 +590,12 @@ function App() {
   return <div className="app-shell">
     <aside className="sidebar">
       <div className="brand"><img src="/logo-cb.png" alt="CB Gestão" /></div>
+      <select className="mobile-page-select" value={page} onChange={(event) => navigate(event.target.value)} aria-label="Ir para uma tela">
+        {menu.map((item) => <option key={item} value={item}>{item}</option>)}
+      </select>
       <nav>{menu.map((item) => <button className={page === item ? 'nav-item active' : 'nav-item'} key={item} onClick={() => navigate(item)}>{item}</button>)}</nav>
       <div className="sidebar-bottom"><span className="avatar">{activeUser.name.slice(0, 1).toUpperCase()}</span><div><b>{activeUser.name}</b><small>{activeUser.role}</small></div><button className="logout-button" onClick={() => { api('/auth/logout', { method: 'POST' }).catch(() => {}); setSession(null); }}>Sair</button></div>
+      <button className="mobile-logout" onClick={() => { api('/auth/logout', { method: 'POST' }).catch(() => {}); setSession(null); }}>Sair</button>
     </aside>
     <main className="main">
       <header><div><p className="eyebrow">SETEMBRO DE 2026</p><h1>{page}</h1></div><button className="import-button" onClick={() => navigate('Conciliação')}>Importar extrato</button></header>
