@@ -197,23 +197,40 @@ function App() {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const amount = Number(form.get('amount'));
+    const adjustmentType = form.get('adjustmentType');
     const receivedOn = parseDate(form.get('receivedOn'));
     if (!Number.isFinite(amount) || amount <= 0 || Number.isNaN(receivedOn.getTime())) {
       inform('Informe um valor de pagamento maior que zero e uma data válida.');
+      return;
+    }
+    const remainingForValidation = Math.max(0, charge.amount - (charge.settledAmount ?? charge.receivedAmount ?? 0));
+    const hasDifference = Math.abs(amount - remainingForValidation) > 0.001;
+    const validAdjustment = !hasDifference || (amount < remainingForValidation && ['discount', 'partial'].includes(adjustmentType)) || (amount > remainingForValidation && adjustmentType === 'penaltyInterest');
+    if (!validAdjustment) {
+      inform(amount < remainingForValidation ? 'Para um valor menor que o saldo, informe desconto concedido ou pagamento parcial.' : 'Para um valor maior que o saldo, informe a aplicação de multa e juros.');
       return;
     }
     setCharges((items) => items.map((item) => {
       if (item.id !== charge.id) return item;
       const previousReceipts = item.receipts || [];
       const previousAmount = item.receivedAmount || 0;
+      const previousSettled = item.settledAmount ?? previousAmount;
+      const remaining = Math.max(0, item.amount - previousSettled);
+      const difference = Math.abs(amount - remaining);
+      const discountAmount = adjustmentType === 'discount' ? difference : 0;
+      const penaltyInterestAmount = adjustmentType === 'penaltyInterest' ? difference : 0;
+      const settledAmount = previousSettled + (adjustmentType === 'discount' ? amount + discountAmount : Math.min(amount, remaining));
       const receivedAmount = previousAmount + amount;
       return {
         ...item,
-        receipts: [...previousReceipts, { id: Date.now(), amount, receivedOn: formatBrDate(receivedOn), information: form.get('information') }],
+        receipts: [...previousReceipts, { id: Date.now(), amount, receivedOn: formatBrDate(receivedOn), information: form.get('information'), adjustmentType, discountAmount, penaltyInterestAmount }],
         receivedAmount,
+        settledAmount,
+        discountAmount: (item.discountAmount || 0) + discountAmount,
+        penaltyInterestAmount: (item.penaltyInterestAmount || 0) + penaltyInterestAmount,
         paidAt: formatBrDate(receivedOn),
         receiptInformation: form.get('information'),
-        status: receivedAmount >= item.amount ? 'Pago' : 'Parcial',
+        status: settledAmount >= item.amount ? 'Pago' : 'Parcial',
       };
     }));
     setReceiptCharge(null);
@@ -458,7 +475,14 @@ function Table({ headers, rows }) { return <div className="table-wrap"><table><t
 
 function Modal({ title, children, onClose }) { return <div className="modal-backdrop"><section className="modal"><div className="modal-head"><h2>{title}</h2><button onClick={onClose}>×</button></div>{children}</section></div>; }
 function ChargeForm({ onClose, onSubmit }) { return <Modal title="Nova cobrança" onClose={onClose}><form onSubmit={onSubmit} className="form-grid"><label>Unidade<select name="unit" required>{initialUnits.map((unit) => <option key={unit.id}>{unit.name}</option>)}</select></label><label>Inquilino<input name="tenant" required placeholder="Nome do inquilino" /></label><label>Vencimento<input name="due" required placeholder="dd/mm/aaaa" /></label><label>Valor<input name="amount" required type="number" min="0" step="0.01" placeholder="0,00" /></label><div className="form-actions"><button type="button" className="plain-small" onClick={onClose}>Cancelar</button><button className="solid-small">Salvar cobrança</button></div></form></Modal>; }
-function ReceiptForm({ charge, onClose, onSubmit }) { const received = charge.receivedAmount || 0; const remaining = Math.max(0, charge.amount - received); return <Modal title={`Recebimento · ${charge.unit}`} onClose={onClose}><form onSubmit={(event) => onSubmit(event, charge)} className="form-grid"><div className="termination-summary"><b>{charge.tenant} · vencimento {charge.due}</b><span>Cobrança: {money(charge.amount)} · já recebido: {money(received)}</span><strong>Saldo: {money(remaining)}</strong></div><label>Valor do pagamento<input name="amount" required type="number" min="0.01" step="0.01" defaultValue={remaining || ''} /></label><label>Data do recebimento<input name="receivedOn" required type="date" defaultValue={dateInputValue()} /></label><label className="full">Informações do pagamento<textarea name="information" required placeholder="Ex.: PIX Banco Inter, identificador da transação ou observação" /></label><p className="form-note">Se o valor for menor que o saldo, a cobrança ficará como parcial. Cada registro preserva valor, data e informação.</p><div className="form-actions"><button type="button" className="plain-small" onClick={onClose}>Cancelar</button><button className="solid-small">Confirmar recebimento</button></div></form></Modal>; }
+function ReceiptForm({ charge, onClose, onSubmit }) {
+  const received = charge.receivedAmount || 0;
+  const settled = charge.settledAmount ?? received;
+  const remaining = Math.max(0, charge.amount - settled);
+  const [paymentAmount, setPaymentAmount] = useState(remaining ? String(remaining) : '');
+  const difference = Math.abs(Number(paymentAmount || 0) - remaining);
+  return <Modal title={`Recebimento · ${charge.unit}`} onClose={onClose}><form onSubmit={(event) => onSubmit(event, charge)} className="form-grid"><div className="termination-summary"><b>{charge.tenant} · vencimento {charge.due}</b><span>Cobrança: {money(charge.amount)} · já recebido: {money(received)}</span><strong>Saldo: {money(remaining)}</strong></div><label>Valor do pagamento<input name="amount" required type="number" min="0.01" step="0.01" value={paymentAmount} onChange={(event) => setPaymentAmount(event.target.value)} /></label><label>Data do recebimento<input name="receivedOn" required type="date" defaultValue={dateInputValue()} /></label>{difference > 0.001 ? <><label className="full">Motivo da diferença<select name="adjustmentType" required defaultValue=""><option value="" disabled>Selecione o ajuste aplicado</option>{Number(paymentAmount) < remaining ? <><option value="discount">Desconto concedido</option><option value="partial">Pagamento parcial (sem desconto)</option></> : <option value="penaltyInterest">Multa e juros aplicados</option>}</select></label><div className="adjustment-note">Diferença apurada: <b>{money(difference)}</b>{Number(paymentAmount) < remaining ? ' — será registrada como desconto ou saldo parcial.' : ' — será registrada como multa e juros.'}</div></> : <input type="hidden" name="adjustmentType" value="none" />}<label className="full">Informações do pagamento<textarea name="information" required placeholder="Ex.: PIX Banco Inter, identificador da transação ou observação" /></label><p className="form-note">Cada recebimento preserva valor, data, informação e o ajuste financeiro aplicado.</p><div className="form-actions"><button type="button" className="plain-small" onClick={onClose}>Cancelar</button><button className="solid-small">Confirmar recebimento</button></div></form></Modal>;
+}
 function ExpenseForm({ categories, record, onClose, onSubmit }) { const optionLabel = (item) => item.parentId ? `${categories.find((parent) => parent.id === Number(item.parentId))?.name || 'Categoria'} › ${item.name}` : item.name; return <Modal title={record ? 'Editar despesa' : 'Lançar despesa'} onClose={onClose}><form onSubmit={(event) => onSubmit(event, record)} className="form-grid"><label>Data<input name="date" required defaultValue={record?.date} placeholder="dd/mm/aaaa" /></label><label>Valor<input name="amount" required type="number" min="0" step="0.01" defaultValue={record?.amount} placeholder="0,00" /></label><label className="full">Descrição<input name="description" required defaultValue={record?.description} placeholder="O que foi pago?" /></label><label>Fornecedor ou pessoa<input name="supplier" required defaultValue={record?.supplier} placeholder="Nome" /></label><label>Referência<select name="unit" defaultValue={record?.unit || 'Área comum'}><option>Área comum</option>{initialUnits.map((unit) => <option key={unit.id}>{unit.name}</option>)}</select></label><label>Categoria<select name="category" defaultValue={record?.category}>{categories.filter((item) => item.status === 'Ativa').map((item) => <option key={item.id} value={optionLabel(item)}>{optionLabel(item)}</option>)}</select></label><label>Situação<select name="status" defaultValue={record?.status || 'Pendente'}><option>Pendente</option><option>Conciliada</option><option>Paga</option></select></label><div className="form-actions"><button type="button" className="plain-small" onClick={onClose}>Cancelar</button><button className="solid-small">Salvar despesa</button></div></form></Modal>; }
 function ContractForm({ tenants, record, onClose, onSubmit }) { const defaultDueDay = record?.dueDay || (record?.start ? parseBrDate(record.start).getDate() : 5); return <Modal title={record ? 'Editar contrato' : 'Novo contrato'} onClose={onClose}><form onSubmit={(event) => onSubmit(event, record)} className="form-grid"><label>Unidade<select name="unit" required defaultValue={record?.unit}>{initialUnits.map((unit) => <option key={unit.id}>{unit.name}</option>)}</select></label><label>Inquilino titular<select name="tenant" required defaultValue={record?.tenant || ''}><option value="">Selecione</option>{tenants.filter((item) => item.status === 'Ativo').map((item) => <option key={item.id}>{item.name}</option>)}</select></label><label>Início do contrato<input name="start" required defaultValue={record?.start} placeholder="dd/mm/aaaa" /></label><label>Fim do contrato<input name="end" required defaultValue={record?.end} placeholder="dd/mm/aaaa" /></label><label>Dia de vencimento da fatura<input name="dueDay" required type="number" min="1" max="31" defaultValue={defaultDueDay} /></label><label>Aluguel mensal<input name="rent" required type="number" min="0" step="0.01" defaultValue={record?.rent} placeholder="0,00" /></label><label>Multiplicador da multa<input name="penaltyMultiplier" required type="number" min="0" step="0.01" defaultValue={record?.penaltyMultiplier ?? 0} /><small>Ex.: 3 para três aluguéis.</small></label><label>Situação<select name="status" defaultValue={record?.status || 'Ativo'}><option>Ativo</option><option>Encerrado</option><option>Cancelado</option></select></label><label className="full">Contrato de aluguel (anexo)<input name="attachment" type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" />{record?.attachmentName && <small>Anexo atual: {record.attachmentName}</small>}</label><p className="form-note">As cobranças serão geradas pelo dia de vencimento, somente quando a data estiver dentro do período do contrato. O anexo será associado ao histórico do inquilino.</p><div className="form-actions"><button type="button" className="plain-small" onClick={onClose}>Cancelar</button><button className="solid-small">Salvar contrato</button></div></form></Modal>; }
 
