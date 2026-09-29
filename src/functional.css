@@ -28,3 +28,9 @@
 .termination-summary small { color: #71827d; }
 .receipt-value { display: block; margin-top: 3px; color: #547168; font-size: 11px; }
 .adjustment-note { grid-column: 1 / -1; padding: 9px 12px; border-radius: 8px; background: #fff5df; color: #765720; font-size: 12px; }
+.report-catalog { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
+.report-option { display: grid; gap: 7px; min-height: 126px; padding: 16px; text-align: left; border: 1px solid #dce8e3; border-radius: 10px; background: #fff; color: #24433b; cursor: pointer; }
+.report-option:hover { border-color: #5f9a87; background: #f3f9f6; }
+.report-option span { color: #547f72; font-size: 11px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
+.report-option b { font-size: 16px; }
+.report-option small { color: #71827d; }

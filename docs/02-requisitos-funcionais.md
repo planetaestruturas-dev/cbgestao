@@ -34,6 +34,7 @@
 
 ## Despesas e manutenção
 
+- RF-17.1: cadastrar e editar fornecedores com nome, documento, telefone, categoria principal e situação; despesas devem selecionar um fornecedor cadastrado.
 - RF-18: lançar despesa com data de inclusão, vencimento, data de pagamento quando quitada, valor, fornecedor ou beneficiário, descrição, categoria, forma de pagamento e comprovante.
 - RF-19: vincular a despesa a uma kitnet, a área comum ou a múltiplas unidades por rateio documentado.
 - RF-20: registrar solicitação de manutenção, prioridade, status, responsável e datas, sem valores financeiros próprios.
@@ -44,7 +45,7 @@
 
 - RF-23: exibir no painel mensal receitas recebidas, despesas pagas, resultado de caixa, inadimplência, ocupação e saldo não conciliado.
 - RF-24: permitir filtros por período, unidade, categoria e status.
-- RF-25: emitir relatórios mensais, por unidade e por fornecedor, com exportação para CSV e PDF em fase posterior.
+- RF-25: apresentar uma central de relatórios organizada por categoria e emitir relatórios mensais, por unidade e por fornecedor, cada um com filtros de período, unidade, inquilino, categoria e fornecedor quando aplicável; exportação para CSV e PDF em fase posterior.
 
 ## Segurança e operação
 
