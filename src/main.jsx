@@ -310,18 +310,6 @@ function App() {
     setRestorePoints((items) => [point, ...items].slice(0, 30));
     inform('Ponto de restauração criado com todos os dados atuais.');
   };
-  const resetToReferenceData = () => {
-    const point = {
-      id: `restore-${Date.now()}`,
-      name: 'Antes de restaurar dados de referência',
-      createdAt: new Date().toISOString(),
-      data: structuredClone(currentData()),
-    };
-    setRestorePoints((items) => [point, ...items].slice(0, 30));
-    applyData(referenceData());
-    navigate('Visão geral');
-    inform('Dados de teste removidos e dados de referência importados. O estado anterior foi salvo em Pontos de restauração.');
-  };
   const restorePoint = (point) => {
     if (!point?.data) return;
     applyData(structuredClone(point.data));
@@ -610,7 +598,7 @@ function App() {
       {page === 'Distratos' && <Terminations items={terminations} openForm={() => setShowTerminationForm({})} edit={setShowTerminationForm} form={showTerminationForm && <TerminationForm record={showTerminationForm.id ? showTerminationForm : null} contracts={contracts} onClose={() => setShowTerminationForm(null)} onSubmit={saveTermination} />} />}
       {page === 'Cadastros' && <Registrations tenants={tenants} contracts={contracts} bankAccounts={bankAccounts} suppliers={suppliers} categories={expenseCategories} users={users} accessProfiles={accessProfiles} isAdministrator={activeUser.role === 'Administrador Geral'} profile={tenantProfile} closeProfile={() => setTenantProfile(null)} openProfile={setTenantProfile} openForm={(type, record = null) => setRegistrationForm({ type, record })} form={registrationForm?.type === 'tenant' ? <TenantForm record={registrationForm.record} onClose={() => setRegistrationForm(null)} onSubmit={saveTenant} /> : registrationForm?.type === 'account' ? <BankAccountForm record={registrationForm.record} onClose={() => setRegistrationForm(null)} onSubmit={saveBankAccount} /> : registrationForm?.type === 'supplier' ? <SupplierForm record={registrationForm.record} onClose={() => setRegistrationForm(null)} onSubmit={saveSupplier} /> : registrationForm?.type === 'category' ? <ExpenseCategoryForm record={registrationForm.record} categories={expenseCategories} onClose={() => setRegistrationForm(null)} onSubmit={saveExpenseCategory} /> : registrationForm?.type === 'user' ? <UserForm record={registrationForm.record} accessProfiles={accessProfiles} onClose={() => setRegistrationForm(null)} onSubmit={saveUser} /> : registrationForm?.type === 'accessProfile' ? <AccessProfileForm record={registrationForm.record} onClose={() => setRegistrationForm(null)} onSubmit={saveAccessProfile} /> : null} />}
       {page === 'Relatórios' && <Reports charges={charges} expenses={expenses} suppliers={suppliers} maintenances={maintenances} units={units} />}
-      {page === 'Backups' && <Backups points={restorePoints} createPoint={saveRestorePoint} restorePoint={restorePoint} exportBackup={exportBackup} resetToReferenceData={resetToReferenceData} />}
+      {page === 'Backups' && <Backups points={restorePoints} createPoint={saveRestorePoint} restorePoint={restorePoint} exportBackup={exportBackup} />}
     </main>
   </div>;
 }
@@ -684,10 +672,9 @@ function Registrations({ tenants, contracts, suppliers, categories, users, acces
 
 function TenantProfile({ tenant, contracts, onClose }) { return <Modal title={`Cadastro de ${tenant.name}`} onClose={onClose}><div className="profile-details"><div className="profile-contact"><span><b>CPF</b>{tenant.cpf || 'Não informado'}</span><span><b>Telefone</b>{tenant.phone || 'Não informado'}</span><span><b>E-mail</b>{tenant.email || 'Não informado'}</span><span><b>Situação</b>{tenant.status}</span></div><div><p className="eyebrow">HISTÓRICO CONTRATUAL</p><h3>Contratos e anexos</h3>{contracts.length ? <div className="profile-contracts">{contracts.map((contract) => <article key={contract.id}><b>{contract.unit}</b><small>{contract.start} até {contract.end} · vencimento dia {contract.dueDay || parseBrDate(contract.start).getDate()}</small><small>Multa contratual: {Number(contract.penaltyMultiplier) || 0} × aluguel</small><span>{contract.attachmentName ? `Anexo: ${contract.attachmentName}` : 'Sem anexo cadastrado'}</span>{contract.terminationDate && <em>Distratado em {contract.terminationDate}</em>}</article>)}</div> : <p className="muted">Não há contratos vinculados a este cadastro.</p>}</div></div></Modal>; }
 
-function Backups({ points, createPoint, restorePoint, exportBackup, resetToReferenceData }) {
-  const reset = () => resetToReferenceData();
+function Backups({ points, createPoint, restorePoint, exportBackup }) {
   const restore = (point) => restorePoint(point);
-  return <><section className="card backup-hero"><div><p className="eyebrow">SEGURANÇA DOS DADOS</p><h2>Backups e pontos de restauração</h2><p>Crie uma cópia antes de testar alterações, restaure um estado anterior quando necessário ou baixe um backup completo do sistema.</p></div><div className="backup-actions"><button className="solid-small" onClick={() => createPoint()}>Criar ponto de restauração</button><button className="plain-small" onClick={exportBackup}>Exportar backup geral</button></div></section><section className="card"><div className="card-title"><div><p className="eyebrow">REIMPORTAÇÃO</p><h2>Restaurar dados de referência</h2><small>Remove os dados de teste e recarrega os dados iniciais já usados na validação do sistema.</small></div><button className="danger-small" onClick={reset}>Zerar e reimportar dados</button></div><p className="form-note">Antes da substituição, o sistema salva automaticamente um ponto de restauração. Os pontos ficam guardados neste navegador; a exportação JSON permite manter uma cópia externa.</p></section><section className="card"><div className="card-title"><div><p className="eyebrow">HISTÓRICO LOCAL</p><h2>Pontos de restauração</h2></div><span className="muted">Até 30 pontos são mantidos neste navegador.</span></div>{points.length ? <Table headers={['Nome', 'Criado em', 'Dados salvos', 'Ação']} rows={points.map((point) => [point.name, timestampLabel(point.createdAt), `${point.data?.charges?.length || 0} cobranças · ${point.data?.expenses?.length || 0} despesas · ${point.data?.contracts?.length || 0} contratos`, <button className="table-action" onClick={() => restore(point)}>Restaurar este ponto</button>])} /> : <p className="muted">Ainda não há pontos de restauração criados.</p>}</section></>;
+  return <><section className="card backup-hero"><div><p className="eyebrow">SEGURANÇA DOS DADOS</p><h2>Backups e pontos de restauração</h2><p>Crie uma cópia antes de testar alterações, restaure um estado anterior quando necessário ou baixe um backup completo do sistema.</p></div><div className="backup-actions"><button className="solid-small" onClick={() => createPoint()}>Criar ponto de restauração</button><button className="plain-small" onClick={exportBackup}>Exportar backup geral</button></div></section><section className="card"><div className="card-title"><div><p className="eyebrow">HISTÓRICO LOCAL</p><h2>Pontos de restauração</h2></div><span className="muted">Até 30 pontos são mantidos neste navegador.</span></div>{points.length ? <Table headers={['Nome', 'Criado em', 'Dados salvos', 'Ação']} rows={points.map((point) => [point.name, timestampLabel(point.createdAt), `${point.data?.charges?.length || 0} cobranças · ${point.data?.expenses?.length || 0} despesas · ${point.data?.contracts?.length || 0} contratos`, <button className="table-action" onClick={() => restore(point)}>Restaurar este ponto</button>])} /> : <p className="muted">Ainda não há pontos de restauração criados.</p>}</section></>;
 }
 
 function Reports({ charges, expenses, suppliers, maintenances, units }) {
