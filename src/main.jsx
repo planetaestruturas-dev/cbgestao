@@ -10,57 +10,48 @@ import { parseStatementCsv } from './statementParser.js';
 const initialUnits = Array.from({ length: 12 }, (_, index) => ({
   id: index + 1,
   name: `Kitnet ${String(index + 1).padStart(2, '0')}`,
-  status: index === 10 ? 'Em manutenção' : index === 11 ? 'Vaga' : 'Ocupada',
-  tenant: index === 10 ? '—' : index === 11 ? '—' : ['Lívia Vieira', 'Pedro Antônio', 'Wesley Costa', 'João Pedro', 'Paulo Roberto', 'Gilselly Landim', 'Rita Barbosa', 'João Victor', 'Antônio Maurício', 'Maria Ludiane'][index] || 'Antonia Aline',
-  rent: index === 10 || index === 11 ? 0 : index < 2 ? 500 : 600,
+  status: [4, 5].includes(index + 1) ? 'Vaga' : 'Ocupada',
+  tenant: ['MARCELO QUEIROZ ALVES', 'MARCELO QUEIROZ ALVES', 'DIRLANE QUEIROZ ALVES', '—', '—', 'DANIELE FERREIRA MARCELINO DE LIMA', 'MARINEUDA FERREIRA MARCELINO DE LIMA', 'MARILAC FERREIRA MARCELINO DE LIMA', 'WANDERSON BARBOSA', 'SUELIANA FERREIRA MARCELINO DE LIMA', 'LUCILENE OLIVEIRA CAMPOS', 'MARIA TERESA MARCELINO DE LIMA'][index],
+  rent: [450, 450, 450, 0, 0, 500, 450, 450, 450, 450, 500, 450][index],
 }));
 
 const initialCharges = [
-  { id: 1, unit: 'Kitnet 01', tenant: 'Lívia Vieira', due: '19/09/2026', amount: 500, status: 'Pago', paidAt: '21/09/2026' },
-  { id: 2, unit: 'Kitnet 02', tenant: 'Pedro Antônio', due: '05/09/2026', amount: 600, status: 'Pago', paidAt: '05/09/2026' },
-  { id: 3, unit: 'Kitnet 03', tenant: 'Wesley Costa', due: '08/09/2026', amount: 600, status: 'Pago', paidAt: '08/09/2026' },
-  { id: 4, unit: 'Kitnet 04', tenant: 'João Pedro', due: '27/09/2026', amount: 600, status: 'Em aberto', paidAt: null },
-  { id: 5, unit: 'Kitnet 05', tenant: 'Paulo Roberto', due: '26/09/2026', amount: 600, status: 'Em aberto', paidAt: null },
-  { id: 6, unit: 'Kitnet 06', tenant: 'Gilselly Landim', due: '15/09/2026', amount: 600, status: 'Pago', paidAt: '07/09/2026' },
-  { id: 7, unit: 'Kitnet 07', tenant: 'Rita Barbosa', due: '05/09/2026', amount: 600, status: 'Pago', paidAt: '02/09/2026' },
-  { id: 8, unit: 'Kitnet 08', tenant: 'João Victor', due: '16/09/2026', amount: 500, status: 'Pago', paidAt: '15/09/2026' },
-  { id: 9, unit: 'Kitnet 09', tenant: 'Antônio Maurício', due: '15/09/2026', amount: 600, status: 'Pago', paidAt: '15/09/2026' },
-  { id: 10, unit: 'Kitnet 10', tenant: 'Maria Ludiane', due: '19/09/2026', amount: 600, status: 'Pago', paidAt: '19/09/2026' },
+  { id: 1, unit: 'Kitnet 01', tenant: 'MARCELO QUEIROZ ALVES', due: '10/03/2025', amount: 450, status: 'Pago', paidAt: '22/03/2025' },
+  { id: 2, unit: 'Kitnet 02', tenant: 'MARCELO QUEIROZ ALVES', due: '10/03/2025', amount: 450, status: 'Pago', paidAt: '22/03/2025' },
+  { id: 3, unit: 'Kitnet 03', tenant: 'DIRLANE QUEIROZ ALVES', due: '10/03/2025', amount: 450, status: 'Pago', paidAt: '22/03/2025' },
+  { id: 4, unit: 'Kitnet 06', tenant: 'DANIELE FERREIRA MARCELINO DE LIMA', due: '13/04/2025', amount: 500, status: 'Pago', paidAt: '28/04/2025' },
+  { id: 5, unit: 'Kitnet 07', tenant: 'MARINEUDA FERREIRA MARCELINO DE LIMA', due: '30/03/2025', amount: 450, status: 'Em aberto', paidAt: null },
+  { id: 6, unit: 'Kitnet 08', tenant: 'MARILAC FERREIRA MARCELINO DE LIMA', due: '30/03/2025', amount: 450, status: 'Em aberto', paidAt: null },
+  { id: 7, unit: 'Kitnet 09', tenant: 'WANDERSON BARBOSA', due: '30/04/2025', amount: 450, status: 'Pago', paidAt: '12/05/2025' },
+  { id: 8, unit: 'Kitnet 10', tenant: 'SUELIANA FERREIRA MARCELINO DE LIMA', due: '17/03/2025', amount: 450, status: 'Pago', paidAt: '28/03/2025' },
+  { id: 9, unit: 'Kitnet 11', tenant: 'LUCILENE OLIVEIRA CAMPOS', due: '19/04/2025', amount: 500, status: 'Pago', paidAt: '02/05/2025' },
+  { id: 10, unit: 'Kitnet 12', tenant: 'MARIA TERESA MARCELINO DE LIMA', due: '15/03/2025', amount: 450, status: 'Pago', paidAt: '28/03/2025' },
+  { id: 11, unit: 'Kitnet 01', tenant: 'MARCELO QUEIROZ ALVES', due: '09/04/2025', amount: 450, status: 'Pago', paidAt: '23/04/2025' },
+  { id: 12, unit: 'Kitnet 02', tenant: 'MARCELO QUEIROZ ALVES', due: '09/04/2025', amount: 450, status: 'Pago', paidAt: '23/04/2025' },
+  { id: 13, unit: 'Kitnet 03', tenant: 'DIRLANE QUEIROZ ALVES', due: '09/04/2025', amount: 450, status: 'Pago', paidAt: '23/04/2025' },
+  { id: 14, unit: 'Kitnet 06', tenant: 'DANIELE FERREIRA MARCELINO DE LIMA', due: '13/05/2025', amount: 500, status: 'Em aberto', paidAt: null },
+  { id: 15, unit: 'Kitnet 07', tenant: 'MARINEUDA FERREIRA MARCELINO DE LIMA', due: '30/04/2025', amount: 450, status: 'Pago', paidAt: '12/05/2025' },
+  { id: 16, unit: 'Kitnet 08', tenant: 'MARILAC FERREIRA MARCELINO DE LIMA', due: '30/04/2025', amount: 450, status: 'Pago', paidAt: '12/05/2025' },
+  { id: 17, unit: 'Kitnet 09', tenant: 'WANDERSON BARBOSA', due: '30/05/2025', amount: 450, status: 'Em aberto', paidAt: null },
+  { id: 18, unit: 'Kitnet 10', tenant: 'SUELIANA FERREIRA MARCELINO DE LIMA', due: '17/04/2025', amount: 450, status: 'Pago', paidAt: '02/05/2025' },
+  { id: 19, unit: 'Kitnet 11', tenant: 'LUCILENE OLIVEIRA CAMPOS', due: '19/05/2025', amount: 500, status: 'Em aberto', paidAt: null },
+  { id: 20, unit: 'Kitnet 12', tenant: 'MARIA TERESA MARCELINO DE LIMA', due: '15/04/2025', amount: 450, status: 'Pago', paidAt: '02/05/2025' },
 ];
 
-const initialContracts = [
-  { id: 1, unit: 'Kitnet 01', tenant: 'Lívia Vieira', start: '19/06/2026', end: '18/06/2027', dueDay: 19, rent: 500, status: 'Ativo' },
-  { id: 2, unit: 'Kitnet 02', tenant: 'Pedro Antônio', start: '05/02/2026', end: '04/02/2027', dueDay: 5, rent: 600, status: 'Ativo' },
-  { id: 3, unit: 'Kitnet 03', tenant: 'Wesley Costa', start: '08/09/2026', end: '07/09/2027', dueDay: 8, rent: 600, status: 'Ativo' },
-  { id: 4, unit: 'Kitnet 04', tenant: 'João Pedro', start: '27/08/2026', end: '26/08/2027', dueDay: 27, rent: 600, status: 'Ativo' },
-  { id: 5, unit: 'Kitnet 05', tenant: 'Paulo Roberto', start: '26/08/2026', end: '25/08/2027', dueDay: 26, rent: 600, status: 'Ativo' },
-  { id: 6, unit: 'Kitnet 06', tenant: 'Gilselly Landim', start: '11/06/2026', end: '10/06/2027', dueDay: 15, rent: 600, status: 'Ativo' },
-  { id: 7, unit: 'Kitnet 07', tenant: 'Rita Barbosa', start: '01/07/2026', end: '30/06/2027', dueDay: 5, rent: 600, status: 'Ativo' },
-  { id: 8, unit: 'Kitnet 08', tenant: 'João Victor', start: '16/12/2025', end: '15/12/2026', dueDay: 16, rent: 500, status: 'Ativo' },
-  { id: 9, unit: 'Kitnet 09', tenant: 'Antônio Maurício', start: '15/09/2026', end: '14/09/2027', dueDay: 15, rent: 600, status: 'Ativo' },
-  { id: 10, unit: 'Kitnet 10', tenant: 'Maria Ludiane', start: '19/05/2026', end: '18/05/2027', dueDay: 19, rent: 600, status: 'Ativo' },
-];
+const initialContracts = [];
 
-const initialMaintenances = [
-  { id: 1, openedAt: '02/09/2026', title: 'Vazamento no banheiro', unit: 'Kitnet 03', priority: 'Alta', status: 'Concluída', supplier: 'José Encanador' },
-  { id: 2, openedAt: '11/09/2026', title: 'Revisão da iluminação externa', unit: 'Área comum', priority: 'Média', status: 'Em andamento', supplier: 'Casa Elétrica' },
-];
+const initialMaintenances = [];
 
 const initialTerminations = [];
 
-const initialTenants = [
-  'Lívia Vieira', 'Pedro Antônio', 'Wesley Costa', 'João Pedro', 'Paulo Roberto', 'Gilselly Landim', 'Rita Barbosa', 'João Victor', 'Antônio Maurício', 'Maria Ludiane',
-].map((name, index) => ({ id: index + 1, name, cpf: '', phone: '', email: '', status: 'Ativo' }));
+const initialTenants = [...new Set(initialUnits.map((unit) => unit.tenant).filter((tenant) => tenant !== '—'))]
+  .map((name, index) => ({ id: index + 1, name, cpf: '', phone: '', email: '', status: 'Ativo' }));
 
 const initialBankAccounts = [
   { id: 1, bank: 'Banco Inter', account: '•••• 3528', type: 'Conta corrente', status: 'Ativa' },
 ];
 
-const initialSuppliers = [
-  { id: 1, name: 'José Encanador', document: '', phone: '', category: 'Hidráulica', status: 'Ativo' },
-  { id: 2, name: 'Casa Elétrica', document: '', phone: '', category: 'Elétrica', status: 'Ativo' },
-  { id: 3, name: 'Maria Serviços', document: '', phone: '', category: 'Limpeza', status: 'Ativo' },
-];
+const initialSuppliers = [];
 
 const initialExpenseCategories = [
   { id: 1, name: 'Manutenção', description: 'Reparos, conservação e melhorias', parentId: '', status: 'Ativa' },
@@ -71,18 +62,9 @@ const initialExpenseCategories = [
   { id: 6, name: 'Elétrica', description: 'Iluminação, tomadas e disjuntores', parentId: 1, status: 'Ativa' },
 ];
 
-const initialExpenses = [
-  { id: 1, date: '04/09/2026', dueDate: '10/09/2026', paidAt: '07/09/2026', description: 'Reparo hidráulico', supplier: 'José Encanador', unit: 'Kitnet 03', category: 'Manutenção', amount: 180, status: 'Conciliada' },
-  { id: 2, date: '12/09/2026', dueDate: '20/09/2026', paidAt: '', description: 'Materiais elétricos', supplier: 'Casa Elétrica', unit: 'Área comum', category: 'Manutenção', amount: 245.5, status: 'Pendente' },
-  { id: 3, date: '18/09/2026', dueDate: '25/09/2026', paidAt: '18/09/2026', description: 'Limpeza externa', supplier: 'Maria Serviços', unit: 'Área comum', category: 'Serviços', amount: 150, status: 'Conciliada' },
-];
+const initialExpenses = [];
 
-const bankItems = [
-  { id: 1, date: '21/09/2026', description: 'PIX RECEBIDO LÍVIA VIEIRA', amount: 500, direction: 'Crédito', suggestion: 'Kitnet 01 · aluguel set/26', state: 'Sugerida' },
-  { id: 2, date: '22/09/2026', description: 'PIX RECEBIDO JOÃO PEDRO', amount: 600, direction: 'Crédito', suggestion: 'Kitnet 04 · aluguel set/26', state: 'Sugerida' },
-  { id: 3, date: '23/09/2026', description: 'PAGAMENTO CASA ELÉTRICA', amount: 245.5, direction: 'Débito', suggestion: 'Materiais elétricos', state: 'Sugerida' },
-  { id: 4, date: '24/09/2026', description: 'PIX RECEBIDO SEM IDENTIFICAÇÃO', amount: 600, direction: 'Crédito', suggestion: null, state: 'Pendente' },
-];
+const bankItems = [];
 
 const referenceData = () => ({
   charges: structuredClone(initialCharges),
@@ -225,6 +207,19 @@ function App() {
     setSuppliers(data.suppliers || []);
     setExpenseCategories(data.expenseCategories || []);
   };
+  useEffect(() => {
+    const referenceVersionKey = 'cb-gestao:reference-version';
+    if (window.localStorage.getItem(referenceVersionKey) === '2') return;
+    const point = {
+      id: `restore-${Date.now()}`,
+      name: 'Antes da importação da planilha de referência',
+      createdAt: new Date().toISOString(),
+      data: structuredClone(currentData()),
+    };
+    setRestorePoints((items) => [point, ...items].slice(0, 30));
+    applyData(referenceData());
+    window.localStorage.setItem(referenceVersionKey, '2');
+  }, []);
   const saveRestorePoint = (name = 'Ponto de restauração') => {
     const point = {
       id: `restore-${Date.now()}`,
@@ -519,7 +514,7 @@ function App() {
     <main className="main">
       <header><div><p className="eyebrow">SETEMBRO DE 2026</p><h1>{page}</h1></div><button className="import-button" onClick={() => navigate('Conciliação')}>Importar extrato</button></header>
       {notice && <div className="toast">{notice}</div>}
-      {page === 'Visão geral' && <Dashboard income={income} expenses={paidExpenses} openCharges={openCharges} occupancy={occupancy} navigate={navigate} />}
+      {page === 'Visão geral' && <Dashboard income={income} expenses={paidExpenses} openCharges={openCharges} occupancy={occupancy} pendingBank={bank.filter((item) => item.state !== 'Conciliada').length} navigate={navigate} />}
       {page === 'Unidades' && <Units />}
       {page === 'Contratos' && <Contracts items={contracts} generateCharges={generateContractCharges} edit={(record) => setShowContractForm(record)} openForm={() => setShowContractForm({})} form={showContractForm && <ContractForm record={showContractForm.id ? showContractForm : null} tenants={tenants} onClose={() => setShowContractForm(null)} onSubmit={saveContract} />} />}
       {page === 'Cobranças' && <Charges items={charges} registerReceipt={setReceiptCharge} edit={setShowChargeForm} cancel={cancelCharge} openForm={() => setShowChargeForm({})} form={<>{showChargeForm && <ChargeForm record={showChargeForm.id ? showChargeForm : null} onClose={() => setShowChargeForm(null)} onSubmit={saveCharge} />}{receiptCharge && <ReceiptForm charge={receiptCharge} onClose={() => setReceiptCharge(null)} onSubmit={registerReceipt} />}</>} />}
@@ -534,7 +529,7 @@ function App() {
   </div>;
 }
 
-function Dashboard({ income, expenses, openCharges, occupancy, navigate }) {
+function Dashboard({ income, expenses, openCharges, occupancy, pendingBank, navigate }) {
   return <>
     <section className="metric-grid">
       <Metric label="Recebido no mês" value={money(income)} hint="Aluguéis confirmados" tone="green" />
@@ -547,8 +542,8 @@ function Dashboard({ income, expenses, openCharges, occupancy, navigate }) {
         <div className="list">{openCharges.map((item) => <div className="list-row" key={item.id}><div className="unit-icon">{item.unit.slice(-2)}</div><div><b>{item.unit}</b><small>{item.tenant} · vence {item.due}</small></div><div className="right"><b>{money(item.amount)}</b><span className={`badge ${statusClass(item.status)}`}>{item.status}</span></div></div>)}</div>
       </article>
       <article className="card"><div className="card-title"><div><p className="eyebrow">ATENÇÃO</p><h2>Para revisar hoje</h2></div></div>
-        <div className="action-box"><span className="action-number">4</span><div><b>Transações aguardando conciliação</b><small>Importe o extrato ou confirme as sugestões.</small></div><button className="solid-small" onClick={() => navigate('Conciliação')}>Conciliar</button></div>
-        <div className="action-box"><span className="action-number amber">2</span><div><b>Unidades sem ocupação</b><small>Kitnet 11 em manutenção e Kitnet 12 vaga.</small></div><button className="plain-small" onClick={() => navigate('Unidades')}>Ver unidades</button></div>
+        <div className="action-box"><span className="action-number">{pendingBank}</span><div><b>{pendingBank ? 'Transações aguardando conciliação' : 'Nenhuma transação pendente'}</b><small>{pendingBank ? 'Importe o extrato ou confirme as sugestões.' : 'Importe o extrato do Banco Inter quando houver movimentações.'}</small></div><button className="solid-small" onClick={() => navigate('Conciliação')}>Conciliar</button></div>
+        <div className="action-box"><span className="action-number amber">{12 - occupancy}</span><div><b>Unidades sem ocupação</b><small>Kitnets 04 e 05 estão vagas na planilha de referência.</small></div><button className="plain-small" onClick={() => navigate('Unidades')}>Ver unidades</button></div>
       </article>
     </section>
   </>;
