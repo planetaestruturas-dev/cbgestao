@@ -29,7 +29,7 @@ Cauções, transferências entre contas e valores não identificados aparecem em
 7. **Contratos:** ativos, próximos do vencimento, encerrados e unidades vagas.
 8. **Recebimentos por unidade:** valores efetivamente recebidos, incluindo multa e juros discriminados.
 9. **Despesas por unidade e fornecedor:** quantidade de lançamentos e total financeiro para identificar unidades e prestadores mais onerosos.
-10. **Manutenções por unidade:** total de chamados, concluídos, pendentes e custo real.
+10. **Manutenções por unidade:** total de chamados, concluídos, pendentes e custo calculado pelas despesas vinculadas; cada manutenção possui relatório detalhado de suas despesas.
 
 Relatórios recomendados para a próxima etapa: inadimplência por faixa de atraso, previsão de caixa por vencimento, contratos a vencer, rentabilidade por unidade e comparação entre custo estimado e custo real de manutenção.
 8. **Histórico da unidade:** contratos, cobranças, recebimentos, manutenções e despesas de cada kitnet.
