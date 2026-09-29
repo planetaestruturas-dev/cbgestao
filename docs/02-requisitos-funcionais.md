@@ -54,3 +54,4 @@
 - RF-28: anexar documentos em armazenamento privado e limitar seu acesso aos usuários autorizados.
 - RF-29: realizar cópia de segurança diária do banco de dados e validar restauração periodicamente.
 - RF-30: formatar todos os campos monetários de entrada como Real brasileiro (`R$` e duas casas decimais), mantendo o valor numérico para cálculos e exportações.
+- RF-31: utilizar seletor de calendário em todos os campos de data editáveis, com armazenamento e exibição padronizada em `dd/mm/aaaa`.
