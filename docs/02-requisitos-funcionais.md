@@ -13,7 +13,7 @@
 - RF-06: impedir dois contratos ativos que se sobreponham para a mesma unidade.
 - RF-07: gerar cobranças mensais para cada contrato ativo. Uma cobrança só será criada se seu vencimento calculado estiver dentro do período do contrato; o sistema evita duplicar competência já gerada.
 - RF-08: permitir alteração pontual de uma cobrança sem mudar o contrato, com motivo registrado.
-- RF-08.1: registrar cada recebimento com valor efetivamente pago, data de recebimento e informações/identificador do pagamento; pagamentos parciais devem preservar o saldo em aberto.
+- RF-08.1: registrar cada recebimento com valor efetivamente pago, data de recebimento e informações/identificador do pagamento; em pagamento parcial, encerrar a cobrança original como substituída por saldo e gerar uma nova fatura com o valor restante e vencimento informado.
 - RF-08.2: quando o valor informado divergir do saldo da cobrança, exigir a classificação do ajuste: desconto concedido, pagamento parcial ou multa e juros aplicados; registrar o valor da diferença separadamente para auditoria e relatórios.
 - RF-09: mostrar situação da cobrança como `em aberto`, `parcial`, `paga`, `vencida`, `cancelada` ou `renegociada`.
 - RF-10: avisar sobre contratos próximos do fim e cobranças vencidas.
