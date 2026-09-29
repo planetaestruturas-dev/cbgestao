@@ -20,6 +20,29 @@
   .subnav { gap: 5px; margin: 0 -15px 16px; padding: 0 15px 5px; overflow-x: auto; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
   .subnav::-webkit-scrollbar { display: none; }
   .subnav button { flex: 0 0 auto; padding: 9px 6px; font-size: 12px; white-space: nowrap; }
+  .expenses-title { margin-bottom: 13px; }
+  .expenses-title small { margin-top: 4px; font-size: 12px; line-height: 1.35; }
+  .expense-summary { margin: 0 0 12px; gap: 8px; }
+  .expense-summary span { flex: 1; min-width: 0; padding: 10px; }
+  .expense-summary b { font-size: 15px; }
+  .expense-filters-desktop, .expense-table-desktop { display: none; }
+  .expense-filters-mobile { display: block; margin-bottom: 12px; border: 1px solid #dce8e3; border-radius: 9px; background: #f8faf8; }
+  .expense-filters-mobile summary { padding: 11px 12px; color: #1d5e50; font-size: 12px; font-weight: 800; cursor: pointer; }
+  .expense-filters-mobile[open] summary { border-bottom: 1px solid #e1ebe6; }
+  .expense-filters-mobile .filter-bar { margin: 0; border: 0; border-radius: 0 0 9px 9px; background: transparent; }
+  .expense-mobile-list { display: grid; gap: 10px; }
+  .expense-mobile-card { display: grid; gap: 10px; padding: 13px; border: 1px solid #dfe9e4; border-radius: 10px; background: #fff; }
+  .expense-mobile-top { display: flex; justify-content: space-between; align-items: start; gap: 12px; }
+  .expense-mobile-top .eyebrow { margin-bottom: 3px; font-size: 10px; }
+  .expense-mobile-top h3 { color: #24433b; font-size: 15px; line-height: 1.25; }
+  .expense-mobile-top strong { color: #1d5e50; font-size: 16px; white-space: nowrap; }
+  .expense-mobile-status { display: flex; align-items: center; gap: 8px; color: #71847e; font-size: 11px; font-weight: 700; }
+  .expense-mobile-details { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin: 0; }
+  .expense-mobile-details div { min-width: 0; padding-top: 8px; border-top: 1px solid #edf1ef; }
+  .expense-mobile-details dt { color: #71847e; font-size: 10px; font-weight: 800; letter-spacing: .035em; text-transform: uppercase; }
+  .expense-mobile-details dd { overflow: hidden; margin: 3px 0 0; color: #35524a; font-size: 12px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+  .expense-mobile-actions { display: flex; gap: 8px; padding-top: 2px; }
+  .expense-mobile-actions button { flex: 1; }
   .table-wrap { overflow: visible; }
   .table-wrap table { min-width: 0; border-collapse: separate; border-spacing: 0 10px; }
   .table-wrap thead { display: none; }
