@@ -84,6 +84,19 @@ const bankItems = [
   { id: 4, date: '24/09/2026', description: 'PIX RECEBIDO SEM IDENTIFICAÇÃO', amount: 600, direction: 'Crédito', suggestion: null, state: 'Pendente' },
 ];
 
+const referenceData = () => ({
+  charges: structuredClone(initialCharges),
+  expenses: structuredClone(initialExpenses),
+  bank: structuredClone(bankItems),
+  contracts: structuredClone(initialContracts),
+  maintenances: structuredClone(initialMaintenances),
+  terminations: structuredClone(initialTerminations),
+  tenants: structuredClone(initialTenants),
+  bankAccounts: structuredClone(initialBankAccounts),
+  suppliers: structuredClone(initialSuppliers),
+  expenseCategories: structuredClone(initialExpenseCategories),
+});
+
 const money = (value) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const currencyValue = (value) => {
   if (typeof value === 'number') return value;
@@ -95,6 +108,14 @@ const csvCell = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`;
 const downloadCsv = (fileName, headers, rows) => {
   const csv = `\ufeff${headers.map(csvCell).join(';')}\n${rows.map((row) => row.map(csvCell).join(';')).join('\n')}`;
   const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName;
+  link.click();
+  URL.revokeObjectURL(url);
+};
+const downloadJson = (fileName, content) => {
+  const url = URL.createObjectURL(new Blob([JSON.stringify(content, null, 2)], { type: 'application/json;charset=utf-8;' }));
   const link = document.createElement('a');
   link.href = url;
   link.download = fileName;
@@ -115,6 +136,7 @@ const parseBrDate = (value) => {
 const parseDate = (value) => String(value).includes('-') ? new Date(`${value}T12:00:00`) : parseBrDate(value);
 const formatBrDate = (value) => value.toLocaleDateString('pt-BR');
 const dateInputValue = () => new Date().toISOString().slice(0, 10);
+const timestampLabel = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value));
 const isOpenCharge = (item) => !['Pago', 'Cancelada', 'Substituída por saldo'].includes(item.status);
 const terminationCalculation = (contract, terminationValue) => {
   if (!contract || !terminationValue) return { totalDays: 0, remainingDays: 0, calculatedPenalty: 0 };
@@ -158,6 +180,7 @@ function App() {
   const [bankAccounts, setBankAccounts] = useStoredState('cb-gestao:contas-bancarias', initialBankAccounts);
   const [suppliers, setSuppliers] = useStoredState('cb-gestao:fornecedores', initialSuppliers);
   const [expenseCategories, setExpenseCategories] = useStoredState('cb-gestao:categorias-despesa', initialExpenseCategories);
+  const [restorePoints, setRestorePoints] = useStoredState('cb-gestao:pontos-restauracao', []);
   const [notice, setNotice] = useState('');
   const [showChargeForm, setShowChargeForm] = useState(null);
   const [receiptCharge, setReceiptCharge] = useState(null);
@@ -185,6 +208,57 @@ function App() {
     setShowChargeForm(false);
     setReceiptCharge(null);
     setShowExpenseForm(false);
+  };
+
+  const currentData = () => ({
+    charges, expenses, bank, contracts, maintenances, terminations, tenants, bankAccounts, suppliers, expenseCategories,
+  });
+  const applyData = (data) => {
+    setCharges(data.charges || []);
+    setExpenses(data.expenses || []);
+    setBank(data.bank || []);
+    setContracts(data.contracts || []);
+    setMaintenances(data.maintenances || []);
+    setTerminations(data.terminations || []);
+    setTenants(data.tenants || []);
+    setBankAccounts(data.bankAccounts || []);
+    setSuppliers(data.suppliers || []);
+    setExpenseCategories(data.expenseCategories || []);
+  };
+  const saveRestorePoint = (name = 'Ponto de restauração') => {
+    const point = {
+      id: `restore-${Date.now()}`,
+      name,
+      createdAt: new Date().toISOString(),
+      data: structuredClone(currentData()),
+    };
+    setRestorePoints((items) => [point, ...items].slice(0, 30));
+    inform('Ponto de restauração criado com todos os dados atuais.');
+  };
+  const resetToReferenceData = () => {
+    const point = {
+      id: `restore-${Date.now()}`,
+      name: 'Antes de restaurar dados de referência',
+      createdAt: new Date().toISOString(),
+      data: structuredClone(currentData()),
+    };
+    setRestorePoints((items) => [point, ...items].slice(0, 30));
+    applyData(referenceData());
+    navigate('Visão geral');
+    inform('Dados de teste removidos e dados de referência importados. O estado anterior foi salvo em Pontos de restauração.');
+  };
+  const restorePoint = (point) => {
+    if (!point?.data) return;
+    applyData(structuredClone(point.data));
+    navigate('Visão geral');
+    inform(`Dados restaurados do ponto “${point.name}”.`);
+  };
+  const exportBackup = () => {
+    const exportedAt = new Date().toISOString();
+    downloadJson(`cb-gestao-backup-${exportedAt.slice(0, 10)}.json`, {
+      application: 'CB Gestão de Kitnets', version: 1, exportedAt, data: currentData(), restorePoints,
+    });
+    inform('Backup geral exportado em JSON. Guarde o arquivo em local seguro.');
   };
 
   const confirmBankItem = (id) => {
@@ -435,7 +509,7 @@ function App() {
     inform(record ? 'Categoria atualizada.' : 'Categoria cadastrada.');
   };
 
-  const menu = ['Visão geral', 'Unidades', 'Contratos', 'Cobranças', 'Conciliação', 'Despesas', 'Manutenções', 'Distratos', 'Cadastros', 'Relatórios'];
+  const menu = ['Visão geral', 'Unidades', 'Contratos', 'Cobranças', 'Conciliação', 'Despesas', 'Manutenções', 'Distratos', 'Cadastros', 'Relatórios', 'Backups'];
   return <div className="app-shell">
     <aside className="sidebar">
       <div className="brand"><img src="/logo-cb.png" alt="CB Gestão" /></div>
@@ -455,6 +529,7 @@ function App() {
       {page === 'Distratos' && <Terminations items={terminations} openForm={() => setShowTerminationForm({})} edit={setShowTerminationForm} form={showTerminationForm && <TerminationForm record={showTerminationForm.id ? showTerminationForm : null} contracts={contracts} onClose={() => setShowTerminationForm(null)} onSubmit={saveTermination} />} />}
       {page === 'Cadastros' && <Registrations tenants={tenants} contracts={contracts} bankAccounts={bankAccounts} suppliers={suppliers} categories={expenseCategories} profile={tenantProfile} closeProfile={() => setTenantProfile(null)} openProfile={setTenantProfile} openForm={(type, record = null) => setRegistrationForm({ type, record })} form={registrationForm?.type === 'tenant' ? <TenantForm record={registrationForm.record} onClose={() => setRegistrationForm(null)} onSubmit={saveTenant} /> : registrationForm?.type === 'account' ? <BankAccountForm record={registrationForm.record} onClose={() => setRegistrationForm(null)} onSubmit={saveBankAccount} /> : registrationForm?.type === 'supplier' ? <SupplierForm record={registrationForm.record} onClose={() => setRegistrationForm(null)} onSubmit={saveSupplier} /> : registrationForm?.type === 'category' ? <ExpenseCategoryForm record={registrationForm.record} categories={expenseCategories} onClose={() => setRegistrationForm(null)} onSubmit={saveExpenseCategory} /> : null} />}
       {page === 'Relatórios' && <Reports charges={charges} expenses={expenses} suppliers={suppliers} maintenances={maintenances} units={initialUnits} />}
+      {page === 'Backups' && <Backups points={restorePoints} createPoint={saveRestorePoint} restorePoint={restorePoint} exportBackup={exportBackup} resetToReferenceData={resetToReferenceData} />}
     </main>
   </div>;
 }
@@ -509,6 +584,12 @@ function Terminations({ items, openForm, edit, form }) { return <>{form}<section
 function Registrations({ tenants, contracts, suppliers, categories, openForm, form, profile, closeProfile, openProfile }) { const [section, setSection] = useState('tenant'); const label = (item) => item.parentId ? `${categories.find((parent) => parent.id === Number(item.parentId))?.name || 'Categoria'} › ${item.name}` : item.name; const body = section === 'tenant' ? <><div className="card-title"><div><p className="eyebrow">PESSOAS</p><h2>Inquilinos</h2></div><button className="solid-small" onClick={() => openForm('tenant')}>Novo inquilino</button></div><Table headers={['Nome', 'CPF', 'Telefone', 'Situação', 'Ações']} rows={tenants.map((item) => [item.name, item.cpf || 'Não informado', item.phone || 'Não informado', <span className="badge pago">{item.status}</span>, <span className="row-actions"><button className="table-action" onClick={() => openProfile(item)}>Ver cadastro</button><button className="plain-small" onClick={() => openForm('tenant', item)}>Editar</button></span>])} /></> : section === 'supplier' ? <><div className="card-title"><div><p className="eyebrow">PARCEIROS</p><h2>Fornecedores</h2></div><button className="solid-small" onClick={() => openForm('supplier')}>Novo fornecedor</button></div><Table headers={['Nome', 'Categoria', 'Telefone', 'Situação', 'Ação']} rows={suppliers.map((item) => [item.name, item.category || 'Não informada', item.phone || 'Não informado', <span className="badge pago">{item.status}</span>, <button className="table-action" onClick={() => openForm('supplier', item)}>Editar</button>])} /></> : <><div className="card-title"><div><p className="eyebrow">FINANCEIRO</p><h2>Categorias e subcategorias</h2></div><button className="solid-small" onClick={() => openForm('category')}>Nova categoria</button></div><Table headers={['Categoria', 'Descrição', 'Situação', 'Ação']} rows={categories.map((item) => [label(item), item.description || 'Sem descrição', <span className="badge pago">{item.status}</span>, <button className="table-action" onClick={() => openForm('category', item)}>Editar</button>])} /></>; return <>{form}{profile && <TenantProfile tenant={profile} contracts={contracts.filter((item) => item.tenant === profile.name)} onClose={closeProfile} />}<section className="card"><div className="subnav"><button className={section === 'tenant' ? 'active' : ''} onClick={() => setSection('tenant')}>Inquilinos</button><button className={section === 'supplier' ? 'active' : ''} onClick={() => setSection('supplier')}>Fornecedores</button><button className={section === 'category' ? 'active' : ''} onClick={() => setSection('category')}>Categorias de despesas</button></div>{body}</section></>; }
 
 function TenantProfile({ tenant, contracts, onClose }) { return <Modal title={`Cadastro de ${tenant.name}`} onClose={onClose}><div className="profile-details"><div className="profile-contact"><span><b>CPF</b>{tenant.cpf || 'Não informado'}</span><span><b>Telefone</b>{tenant.phone || 'Não informado'}</span><span><b>E-mail</b>{tenant.email || 'Não informado'}</span><span><b>Situação</b>{tenant.status}</span></div><div><p className="eyebrow">HISTÓRICO CONTRATUAL</p><h3>Contratos e anexos</h3>{contracts.length ? <div className="profile-contracts">{contracts.map((contract) => <article key={contract.id}><b>{contract.unit}</b><small>{contract.start} até {contract.end} · vencimento dia {contract.dueDay || parseBrDate(contract.start).getDate()}</small><small>Multa contratual: {Number(contract.penaltyMultiplier) || 0} × aluguel</small><span>{contract.attachmentName ? `Anexo: ${contract.attachmentName}` : 'Sem anexo cadastrado'}</span>{contract.terminationDate && <em>Distratado em {contract.terminationDate}</em>}</article>)}</div> : <p className="muted">Não há contratos vinculados a este cadastro.</p>}</div></div></Modal>; }
+
+function Backups({ points, createPoint, restorePoint, exportBackup, resetToReferenceData }) {
+  const reset = () => resetToReferenceData();
+  const restore = (point) => restorePoint(point);
+  return <><section className="card backup-hero"><div><p className="eyebrow">SEGURANÇA DOS DADOS</p><h2>Backups e pontos de restauração</h2><p>Crie uma cópia antes de testar alterações, restaure um estado anterior quando necessário ou baixe um backup completo do sistema.</p></div><div className="backup-actions"><button className="solid-small" onClick={() => createPoint()}>Criar ponto de restauração</button><button className="plain-small" onClick={exportBackup}>Exportar backup geral</button></div></section><section className="card"><div className="card-title"><div><p className="eyebrow">REIMPORTAÇÃO</p><h2>Restaurar dados de referência</h2><small>Remove os dados de teste e recarrega os dados iniciais já usados na validação do sistema.</small></div><button className="danger-small" onClick={reset}>Zerar e reimportar dados</button></div><p className="form-note">Antes da substituição, o sistema salva automaticamente um ponto de restauração. Os pontos ficam guardados neste navegador; a exportação JSON permite manter uma cópia externa.</p></section><section className="card"><div className="card-title"><div><p className="eyebrow">HISTÓRICO LOCAL</p><h2>Pontos de restauração</h2></div><span className="muted">Até 30 pontos são mantidos neste navegador.</span></div>{points.length ? <Table headers={['Nome', 'Criado em', 'Dados salvos', 'Ação']} rows={points.map((point) => [point.name, timestampLabel(point.createdAt), `${point.data?.charges?.length || 0} cobranças · ${point.data?.expenses?.length || 0} despesas · ${point.data?.contracts?.length || 0} contratos`, <button className="table-action" onClick={() => restore(point)}>Restaurar este ponto</button>])} /> : <p className="muted">Ainda não há pontos de restauração criados.</p>}</section></>;
+}
 
 function Reports({ charges, expenses, suppliers, maintenances, units }) {
   const [selected, setSelected] = useState('');

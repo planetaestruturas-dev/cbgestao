@@ -41,3 +41,9 @@
 .maintenance-observations p:last-child { margin: 4px 0 0; white-space: pre-wrap; }
 .report-detail-title { margin: 28px 0 12px; }
 .report-detail-title h3 { margin: 3px 0 0; color: #24433b; }
+.backup-hero { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+.backup-hero h2 { margin: 4px 0 8px; color: #17332d; }
+.backup-hero p:not(.eyebrow) { max-width: 660px; margin: 0; color: #587068; line-height: 1.5; }
+.backup-actions { display: flex; flex: 0 0 auto; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.danger-small { border: 0; border-radius: 7px; padding: 9px 12px; background: #9e3d3d; color: #fff; font: inherit; font-size: 12px; font-weight: 800; cursor: pointer; white-space: nowrap; }
+.danger-small:hover { background: #842f2f; }

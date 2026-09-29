@@ -27,6 +27,8 @@
   .list-row .right { grid-column: 2; text-align: left; justify-items: start; display: flex; gap: 7px; align-items: center; }
   .modal { max-height: 90vh; overflow: auto; padding: 20px; }
   .metric { min-height: 130px; }
+  .backup-hero { align-items: flex-start; flex-direction: column; }
+  .backup-actions { justify-content: flex-start; }
 }
 
 @media (max-width: 420px) {
