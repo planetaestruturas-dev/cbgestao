@@ -26,3 +26,4 @@
 .termination-summary { grid-column: 1 / -1; display: grid; gap: 4px; padding: 12px; border-radius: 8px; background: #edf6f2; color: #47635b; font-size: 12px; }
 .termination-summary strong { color: #1d5e50; font-size: 20px; }
 .termination-summary small { color: #71827d; }
+.receipt-value { display: block; margin-top: 3px; color: #547168; font-size: 11px; }

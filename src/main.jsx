@@ -146,6 +146,7 @@ function App() {
   const [expenseCategories, setExpenseCategories] = useStoredState('cb-gestao:categorias-despesa', initialExpenseCategories);
   const [notice, setNotice] = useState('');
   const [showChargeForm, setShowChargeForm] = useState(null);
+  const [receiptCharge, setReceiptCharge] = useState(null);
   const [showExpenseForm, setShowExpenseForm] = useState(null);
   const [showContractForm, setShowContractForm] = useState(null);
   const [showMaintenanceForm, setShowMaintenanceForm] = useState(false);
@@ -154,7 +155,7 @@ function App() {
   const [showTerminationForm, setShowTerminationForm] = useState(null);
   const [tenantProfile, setTenantProfile] = useState(null);
 
-  const income = useMemo(() => charges.filter((item) => item.status === 'Pago').reduce((sum, item) => sum + item.amount, 0), [charges]);
+  const income = useMemo(() => charges.reduce((sum, item) => sum + (item.receivedAmount ?? (item.status === 'Pago' ? item.amount : 0)), 0), [charges]);
   const paidExpenses = useMemo(() => expenses.reduce((sum, item) => sum + item.amount, 0), [expenses]);
   const openCharges = useMemo(() => charges.filter((item) => item.status !== 'Pago'), [charges]);
   const occupancy = initialUnits.filter((unit) => unit.status === 'Ocupada').length;
@@ -167,6 +168,7 @@ function App() {
   const navigate = (next) => {
     setPage(next);
     setShowChargeForm(false);
+    setReceiptCharge(null);
     setShowExpenseForm(false);
   };
 
@@ -191,9 +193,31 @@ function App() {
     }
   };
 
-  const registerReceipt = (id) => {
-    setCharges((items) => items.map((item) => item.id === id ? { ...item, status: 'Pago', paidAt: todayDisplay() } : item));
-    inform('Recebimento registrado. O valor já compõe o resultado de caixa.');
+  const registerReceipt = (event, charge) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const amount = Number(form.get('amount'));
+    const receivedOn = parseDate(form.get('receivedOn'));
+    if (!Number.isFinite(amount) || amount <= 0 || Number.isNaN(receivedOn.getTime())) {
+      inform('Informe um valor de pagamento maior que zero e uma data válida.');
+      return;
+    }
+    setCharges((items) => items.map((item) => {
+      if (item.id !== charge.id) return item;
+      const previousReceipts = item.receipts || [];
+      const previousAmount = item.receivedAmount || 0;
+      const receivedAmount = previousAmount + amount;
+      return {
+        ...item,
+        receipts: [...previousReceipts, { id: Date.now(), amount, receivedOn: formatBrDate(receivedOn), information: form.get('information') }],
+        receivedAmount,
+        paidAt: formatBrDate(receivedOn),
+        receiptInformation: form.get('information'),
+        status: receivedAmount >= item.amount ? 'Pago' : 'Parcial',
+      };
+    }));
+    setReceiptCharge(null);
+    inform('Recebimento registrado com valor, data e informação. O valor já compõe o resultado de caixa.');
   };
 
   const addCharge = (event) => {
@@ -352,7 +376,7 @@ function App() {
       {page === 'Visão geral' && <Dashboard income={income} expenses={paidExpenses} openCharges={openCharges} occupancy={occupancy} navigate={navigate} />}
       {page === 'Unidades' && <Units />}
       {page === 'Contratos' && <Contracts items={contracts} generateCharges={generateContractCharges} edit={(record) => setShowContractForm(record)} openForm={() => setShowContractForm({})} form={showContractForm && <ContractForm record={showContractForm.id ? showContractForm : null} tenants={tenants} onClose={() => setShowContractForm(null)} onSubmit={saveContract} />} />}
-      {page === 'Cobranças' && <Charges items={charges} registerReceipt={registerReceipt} openForm={() => setShowChargeForm({})} form={showChargeForm && <ChargeForm onClose={() => setShowChargeForm(null)} onSubmit={addCharge} />} />}
+      {page === 'Cobranças' && <Charges items={charges} registerReceipt={setReceiptCharge} openForm={() => setShowChargeForm({})} form={<>{showChargeForm && <ChargeForm onClose={() => setShowChargeForm(null)} onSubmit={addCharge} />}{receiptCharge && <ReceiptForm charge={receiptCharge} onClose={() => setReceiptCharge(null)} onSubmit={registerReceipt} />}</>} />}
       {page === 'Conciliação' && <Reconciliation items={bank} confirm={confirmBankItem} edit={setBankEdit} importStatement={importStatement} inform={inform} form={bankEdit && <BankTransactionForm record={bankEdit} onClose={() => setBankEdit(null)} onSubmit={saveBankItem} />} />}
       {page === 'Despesas' && <Expenses items={expenses} edit={(record) => setShowExpenseForm(record)} openForm={() => setShowExpenseForm({})} form={showExpenseForm && <ExpenseForm record={showExpenseForm.id ? showExpenseForm : null} categories={expenseCategories} onClose={() => setShowExpenseForm(null)} onSubmit={saveExpense} />} />}
       {page === 'Manutenções' && <Maintenances items={maintenances} openForm={() => setShowMaintenanceForm(true)} form={showMaintenanceForm && <MaintenanceForm onClose={() => setShowMaintenanceForm(false)} onSubmit={addMaintenance} />} />}
@@ -392,7 +416,7 @@ function Contracts({ items, openForm, edit, generateCharges, form }) { return <>
 function Charges({ items, registerReceipt, openForm, form }) {
   const [filters, setFilters] = useState({ start: '', end: '', tenant: '' });
   const filtered = items.filter((item) => inRange(dateToIso(item.due), filters.start, filters.end) && (!filters.tenant || item.tenant === filters.tenant));
-  return <>{form}<section className="card"><div className="card-title"><div><p className="eyebrow">ALUGUÉIS · SET/2026</p><h2>Cobranças</h2></div><button className="solid-small" onClick={openForm}>Nova cobrança</button></div><FilterBar filters={filters} setFilters={setFilters} tenants={items.map((item) => item.tenant)} /><p className="filter-result">{filtered.length} cobrança(s) encontrada(s)</p><Table headers={['Unidade', 'Inquilino', 'Vencimento', 'Valor', 'Situação', 'Recebimento', 'Ação']} rows={filtered.map((item) => [item.unit, item.tenant, item.due, money(item.amount), <span className={`badge ${statusClass(item.status)}`}>{item.status}</span>, item.paidAt || '—', item.status === 'Pago' ? <span className="muted">Confirmado</span> : <button className="table-action" onClick={() => registerReceipt(item.id)}>Registrar recebimento</button>])} /></section></>;
+  return <>{form}<section className="card"><div className="card-title"><div><p className="eyebrow">ALUGUÉIS · SET/2026</p><h2>Cobranças</h2></div><button className="solid-small" onClick={openForm}>Nova cobrança</button></div><FilterBar filters={filters} setFilters={setFilters} tenants={items.map((item) => item.tenant)} /><p className="filter-result">{filtered.length} cobrança(s) encontrada(s)</p><Table headers={['Unidade', 'Inquilino', 'Vencimento', 'Valor', 'Situação', 'Recebimento', 'Ação']} rows={filtered.map((item) => [item.unit, item.tenant, item.due, money(item.amount), <span className={`badge ${statusClass(item.status)}`}>{item.status}</span>, item.paidAt ? <span>{item.paidAt}<small className="receipt-value">{money(item.receivedAmount ?? item.amount)}</small></span> : '—', item.status === 'Pago' ? <span className="muted">Confirmado</span> : <button className="table-action" onClick={() => registerReceipt(item)}>Registrar recebimento</button>])} /></section></>;
 }
 
 function Reconciliation({ items, confirm, edit, importStatement, form }) { return <>{form}<section className="card"><div className="card-title"><div><p className="eyebrow">BANCO INTER</p><h2>Conciliação bancária</h2><small>Importe um CSV com as colunas Data, Descrição e Valor. As transações entram como pendentes para conferência.</small></div><label className="solid-small file-input">Selecionar CSV<input type="file" accept=".csv,text/csv" onChange={importStatement} /></label></div><div className="reconciliation-list">{items.map((item) => <article className="bank-row" key={item.id}><div className={`direction ${item.direction === 'Crédito' ? 'credit' : 'debit'}`}>{item.direction === 'Crédito' ? '↓' : '↑'}</div><div className="bank-main"><b>{item.description}</b><small>{item.date} · {item.direction}</small></div><div className="suggestion">{item.suggestion ? <><small>Sugestão</small><b>{item.suggestion}</b></> : <span className="badge pendente">Sem sugestão</span>}</div><div className="right"><b>{money(item.amount)}</b><span className={`badge ${statusClass(item.state)}`}>{item.state}</span></div><div className="bank-actions">{item.state === 'Sugerida' && <button className="solid-small" onClick={() => confirm(item.id)}>Confirmar</button>}<button className="plain-small" onClick={() => edit(item)}>Editar</button></div></article>)}</div></section></>; }
@@ -415,7 +439,7 @@ function Reports({ charges, expenses, units }) {
   const [filters, setFilters] = useState({ start: '', end: '', tenant: '', category: '' });
   const filteredCharges = charges.filter((item) => inRange(dateToIso(item.paidAt || item.due), filters.start, filters.end) && (!filters.tenant || item.tenant === filters.tenant));
   const filteredExpenses = expenses.filter((item) => inRange(dateToIso(item.date), filters.start, filters.end) && (!filters.category || item.category === filters.category));
-  const income = filteredCharges.filter((item) => item.status === 'Pago').reduce((total, item) => total + item.amount, 0);
+  const income = filteredCharges.reduce((total, item) => total + (item.receivedAmount ?? (item.status === 'Pago' ? item.amount : 0)), 0);
   const expenseTotal = filteredExpenses.reduce((total, item) => total + item.amount, 0);
   const openTotal = filteredCharges.filter((item) => item.status !== 'Pago').reduce((total, item) => total + item.amount, 0);
   const reportUnits = units.filter((unit) => unit.rent && (!filters.tenant || filteredCharges.some((charge) => charge.unit === unit.name)));
@@ -434,6 +458,7 @@ function Table({ headers, rows }) { return <div className="table-wrap"><table><t
 
 function Modal({ title, children, onClose }) { return <div className="modal-backdrop"><section className="modal"><div className="modal-head"><h2>{title}</h2><button onClick={onClose}>×</button></div>{children}</section></div>; }
 function ChargeForm({ onClose, onSubmit }) { return <Modal title="Nova cobrança" onClose={onClose}><form onSubmit={onSubmit} className="form-grid"><label>Unidade<select name="unit" required>{initialUnits.map((unit) => <option key={unit.id}>{unit.name}</option>)}</select></label><label>Inquilino<input name="tenant" required placeholder="Nome do inquilino" /></label><label>Vencimento<input name="due" required placeholder="dd/mm/aaaa" /></label><label>Valor<input name="amount" required type="number" min="0" step="0.01" placeholder="0,00" /></label><div className="form-actions"><button type="button" className="plain-small" onClick={onClose}>Cancelar</button><button className="solid-small">Salvar cobrança</button></div></form></Modal>; }
+function ReceiptForm({ charge, onClose, onSubmit }) { const received = charge.receivedAmount || 0; const remaining = Math.max(0, charge.amount - received); return <Modal title={`Recebimento · ${charge.unit}`} onClose={onClose}><form onSubmit={(event) => onSubmit(event, charge)} className="form-grid"><div className="termination-summary"><b>{charge.tenant} · vencimento {charge.due}</b><span>Cobrança: {money(charge.amount)} · já recebido: {money(received)}</span><strong>Saldo: {money(remaining)}</strong></div><label>Valor do pagamento<input name="amount" required type="number" min="0.01" step="0.01" defaultValue={remaining || ''} /></label><label>Data do recebimento<input name="receivedOn" required type="date" defaultValue={dateInputValue()} /></label><label className="full">Informações do pagamento<textarea name="information" required placeholder="Ex.: PIX Banco Inter, identificador da transação ou observação" /></label><p className="form-note">Se o valor for menor que o saldo, a cobrança ficará como parcial. Cada registro preserva valor, data e informação.</p><div className="form-actions"><button type="button" className="plain-small" onClick={onClose}>Cancelar</button><button className="solid-small">Confirmar recebimento</button></div></form></Modal>; }
 function ExpenseForm({ categories, record, onClose, onSubmit }) { const optionLabel = (item) => item.parentId ? `${categories.find((parent) => parent.id === Number(item.parentId))?.name || 'Categoria'} › ${item.name}` : item.name; return <Modal title={record ? 'Editar despesa' : 'Lançar despesa'} onClose={onClose}><form onSubmit={(event) => onSubmit(event, record)} className="form-grid"><label>Data<input name="date" required defaultValue={record?.date} placeholder="dd/mm/aaaa" /></label><label>Valor<input name="amount" required type="number" min="0" step="0.01" defaultValue={record?.amount} placeholder="0,00" /></label><label className="full">Descrição<input name="description" required defaultValue={record?.description} placeholder="O que foi pago?" /></label><label>Fornecedor ou pessoa<input name="supplier" required defaultValue={record?.supplier} placeholder="Nome" /></label><label>Referência<select name="unit" defaultValue={record?.unit || 'Área comum'}><option>Área comum</option>{initialUnits.map((unit) => <option key={unit.id}>{unit.name}</option>)}</select></label><label>Categoria<select name="category" defaultValue={record?.category}>{categories.filter((item) => item.status === 'Ativa').map((item) => <option key={item.id} value={optionLabel(item)}>{optionLabel(item)}</option>)}</select></label><label>Situação<select name="status" defaultValue={record?.status || 'Pendente'}><option>Pendente</option><option>Conciliada</option><option>Paga</option></select></label><div className="form-actions"><button type="button" className="plain-small" onClick={onClose}>Cancelar</button><button className="solid-small">Salvar despesa</button></div></form></Modal>; }
 function ContractForm({ tenants, record, onClose, onSubmit }) { const defaultDueDay = record?.dueDay || (record?.start ? parseBrDate(record.start).getDate() : 5); return <Modal title={record ? 'Editar contrato' : 'Novo contrato'} onClose={onClose}><form onSubmit={(event) => onSubmit(event, record)} className="form-grid"><label>Unidade<select name="unit" required defaultValue={record?.unit}>{initialUnits.map((unit) => <option key={unit.id}>{unit.name}</option>)}</select></label><label>Inquilino titular<select name="tenant" required defaultValue={record?.tenant || ''}><option value="">Selecione</option>{tenants.filter((item) => item.status === 'Ativo').map((item) => <option key={item.id}>{item.name}</option>)}</select></label><label>Início do contrato<input name="start" required defaultValue={record?.start} placeholder="dd/mm/aaaa" /></label><label>Fim do contrato<input name="end" required defaultValue={record?.end} placeholder="dd/mm/aaaa" /></label><label>Dia de vencimento da fatura<input name="dueDay" required type="number" min="1" max="31" defaultValue={defaultDueDay} /></label><label>Aluguel mensal<input name="rent" required type="number" min="0" step="0.01" defaultValue={record?.rent} placeholder="0,00" /></label><label>Multiplicador da multa<input name="penaltyMultiplier" required type="number" min="0" step="0.01" defaultValue={record?.penaltyMultiplier ?? 0} /><small>Ex.: 3 para três aluguéis.</small></label><label>Situação<select name="status" defaultValue={record?.status || 'Ativo'}><option>Ativo</option><option>Encerrado</option><option>Cancelado</option></select></label><label className="full">Contrato de aluguel (anexo)<input name="attachment" type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" />{record?.attachmentName && <small>Anexo atual: {record.attachmentName}</small>}</label><p className="form-note">As cobranças serão geradas pelo dia de vencimento, somente quando a data estiver dentro do período do contrato. O anexo será associado ao histórico do inquilino.</p><div className="form-actions"><button type="button" className="plain-small" onClick={onClose}>Cancelar</button><button className="solid-small">Salvar contrato</button></div></form></Modal>; }
 
