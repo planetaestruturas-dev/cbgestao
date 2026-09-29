@@ -55,10 +55,12 @@ const initialBankAccounts = [
 ];
 
 const initialExpenseCategories = [
-  { id: 1, name: 'Manutenção', description: 'Reparos, conservação e melhorias', status: 'Ativa' },
-  { id: 2, name: 'Serviços', description: 'Limpeza, mão de obra e serviços recorrentes', status: 'Ativa' },
-  { id: 3, name: 'Material', description: 'Materiais de consumo e reparo', status: 'Ativa' },
-  { id: 4, name: 'Utilidades', description: 'Água, energia, internet e similares', status: 'Ativa' },
+  { id: 1, name: 'Manutenção', description: 'Reparos, conservação e melhorias', parentId: '', status: 'Ativa' },
+  { id: 2, name: 'Serviços', description: 'Limpeza, mão de obra e serviços recorrentes', parentId: '', status: 'Ativa' },
+  { id: 3, name: 'Material', description: 'Materiais de consumo e reparo', parentId: '', status: 'Ativa' },
+  { id: 4, name: 'Utilidades', description: 'Água, energia, internet e similares', parentId: '', status: 'Ativa' },
+  { id: 5, name: 'Hidráulica', description: 'Encanamento, registros e vazamentos', parentId: 1, status: 'Ativa' },
+  { id: 6, name: 'Elétrica', description: 'Iluminação, tomadas e disjuntores', parentId: 1, status: 'Ativa' },
 ];
 
 const initialExpenses = [
@@ -76,6 +78,16 @@ const bankItems = [
 
 const money = (value) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const statusClass = (status) => status.toLowerCase().replaceAll(' ', '-').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+const csvCell = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`;
+const downloadCsv = (fileName, headers, rows) => {
+  const csv = `\ufeff${headers.map(csvCell).join(';')}\n${rows.map((row) => row.map(csvCell).join(';')).join('\n')}`;
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName;
+  link.click();
+  URL.revokeObjectURL(url);
+};
 const dateToIso = (date) => {
   const [day, month, year] = date.split('/');
   return `${year}-${month}-${day}`;
@@ -109,11 +121,12 @@ function App() {
   const [bankAccounts, setBankAccounts] = useStoredState('cb-gestao:contas-bancarias', initialBankAccounts);
   const [expenseCategories, setExpenseCategories] = useStoredState('cb-gestao:categorias-despesa', initialExpenseCategories);
   const [notice, setNotice] = useState('');
-  const [showChargeForm, setShowChargeForm] = useState(false);
-  const [showExpenseForm, setShowExpenseForm] = useState(false);
-  const [showContractForm, setShowContractForm] = useState(false);
+  const [showChargeForm, setShowChargeForm] = useState(null);
+  const [showExpenseForm, setShowExpenseForm] = useState(null);
+  const [showContractForm, setShowContractForm] = useState(null);
   const [showMaintenanceForm, setShowMaintenanceForm] = useState(false);
-  const [registrationForm, setRegistrationForm] = useState('');
+  const [registrationForm, setRegistrationForm] = useState(null);
+  const [bankEdit, setBankEdit] = useState(null);
 
   const income = useMemo(() => charges.filter((item) => item.status === 'Pago').reduce((sum, item) => sum + item.amount, 0), [charges]);
   const paidExpenses = useMemo(() => expenses.reduce((sum, item) => sum + item.amount, 0), [expenses]);
@@ -167,22 +180,37 @@ function App() {
     inform('Cobrança incluída para validação local.');
   };
 
-  const addExpense = (event) => {
+  const saveExpense = (event, record) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    setExpenses((items) => [...items, {
-      id: Date.now(), date: form.get('date'), description: form.get('description'), supplier: form.get('supplier'), unit: form.get('unit'), category: form.get('category'), amount: Number(form.get('amount')), status: 'Pendente',
-    }]);
-    setShowExpenseForm(false);
-    inform('Despesa incluída para validação local.');
+    const next = {
+      ...(record || {}),
+      id: record?.id || Date.now(),
+      date: form.get('date'), description: form.get('description'), supplier: form.get('supplier'), unit: form.get('unit'), category: form.get('category'), amount: Number(form.get('amount')), status: form.get('status'),
+    };
+    setExpenses((items) => record ? items.map((item) => item.id === record.id ? next : item) : [...items, next]);
+    setShowExpenseForm(null);
+    inform(record ? 'Despesa atualizada.' : 'Despesa incluída para validação local.');
   };
 
-  const addContract = (event) => {
+  const saveContract = (event, record) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    setContracts((items) => [...items, { id: Date.now(), unit: form.get('unit'), tenant: form.get('tenant'), start: form.get('start'), end: form.get('end'), rent: Number(form.get('rent')), status: 'Ativo' }]);
-    setShowContractForm(false);
-    inform('Contrato cadastrado localmente. A geração automática das cobranças será a próxima etapa.');
+    const next = {
+      ...(record || {}), id: record?.id || Date.now(), unit: form.get('unit'), tenant: form.get('tenant'), start: form.get('start'), end: form.get('end'), rent: Number(form.get('rent')), status: form.get('status'),
+    };
+    setContracts((items) => record ? items.map((item) => item.id === record.id ? next : item) : [...items, next]);
+    setShowContractForm(null);
+    inform(record ? 'Contrato atualizado.' : 'Contrato cadastrado localmente. A geração automática das cobranças será a próxima etapa.');
+  };
+
+  const saveBankItem = (event) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const next = { ...bankEdit, date: form.get('date'), description: form.get('description'), amount: Number(form.get('amount')), direction: form.get('direction'), state: form.get('state') };
+    setBank((items) => items.map((item) => item.id === bankEdit.id ? next : item));
+    setBankEdit(null);
+    inform('Transação bancária atualizada.');
   };
 
   const addMaintenance = (event) => {
@@ -193,28 +221,32 @@ function App() {
     inform('Manutenção registrada. Você poderá associar a despesa quando ela for paga.');
   };
 
-  const addTenant = (event) => {
+  const saveTenant = (event, record) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    setTenants((items) => [...items, { id: Date.now(), name: form.get('name'), cpf: form.get('cpf'), phone: form.get('phone'), email: form.get('email'), status: 'Ativo' }]);
-    setRegistrationForm('');
-    inform('Inquilino cadastrado localmente.');
+    const next = { ...(record || {}), id: record?.id || Date.now(), name: form.get('name'), cpf: form.get('cpf'), phone: form.get('phone'), email: form.get('email'), status: form.get('status') };
+    setTenants((items) => record ? items.map((item) => item.id === record.id ? next : item) : [...items, next]);
+    setRegistrationForm(null);
+    inform(record ? 'Inquilino atualizado.' : 'Inquilino cadastrado localmente.');
   };
 
-  const addBankAccount = (event) => {
+  const saveBankAccount = (event, record) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    setBankAccounts((items) => [...items, { id: Date.now(), bank: form.get('bank'), account: form.get('account'), type: form.get('type'), status: 'Ativa' }]);
-    setRegistrationForm('');
-    inform('Conta bancária cadastrada.');
+    const next = { ...(record || {}), id: record?.id || Date.now(), bank: form.get('bank'), account: form.get('account'), type: form.get('type'), status: form.get('status') };
+    setBankAccounts((items) => record ? items.map((item) => item.id === record.id ? next : item) : [...items, next]);
+    setRegistrationForm(null);
+    inform(record ? 'Conta bancária atualizada.' : 'Conta bancária cadastrada.');
   };
 
-  const addExpenseCategory = (event) => {
+  const saveExpenseCategory = (event, record) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    setExpenseCategories((items) => [...items, { id: Date.now(), name: form.get('name'), description: form.get('description'), status: 'Ativa' }]);
-    setRegistrationForm('');
-    inform('Categoria de despesa cadastrada.');
+    const parentId = form.get('parentId');
+    const next = { ...(record || {}), id: record?.id || Date.now(), name: form.get('name'), description: form.get('description'), parentId: parentId ? Number(parentId) : '', status: form.get('status') };
+    setExpenseCategories((items) => record ? items.map((item) => item.id === record.id ? next : item) : [...items, next]);
+    setRegistrationForm(null);
+    inform(record ? 'Categoria atualizada.' : 'Categoria cadastrada.');
   };
 
   const menu = ['Visão geral', 'Unidades', 'Contratos', 'Cobranças', 'Conciliação', 'Despesas', 'Manutenções', 'Cadastros', 'Relatórios'];
@@ -229,12 +261,12 @@ function App() {
       {notice && <div className="toast">{notice}</div>}
       {page === 'Visão geral' && <Dashboard income={income} expenses={paidExpenses} openCharges={openCharges} occupancy={occupancy} navigate={navigate} />}
       {page === 'Unidades' && <Units />}
-      {page === 'Contratos' && <Contracts items={contracts} openForm={() => setShowContractForm(true)} form={showContractForm && <ContractForm tenants={tenants} onClose={() => setShowContractForm(false)} onSubmit={addContract} />} />}
-      {page === 'Cobranças' && <Charges items={charges} registerReceipt={registerReceipt} openForm={() => setShowChargeForm(true)} form={showChargeForm && <ChargeForm onClose={() => setShowChargeForm(false)} onSubmit={addCharge} />} />}
-      {page === 'Conciliação' && <Reconciliation items={bank} confirm={confirmBankItem} importStatement={importStatement} inform={inform} />}
-      {page === 'Despesas' && <Expenses items={expenses} openForm={() => setShowExpenseForm(true)} form={showExpenseForm && <ExpenseForm categories={expenseCategories} onClose={() => setShowExpenseForm(false)} onSubmit={addExpense} />} />}
+      {page === 'Contratos' && <Contracts items={contracts} edit={(record) => setShowContractForm(record)} openForm={() => setShowContractForm({})} form={showContractForm && <ContractForm record={showContractForm.id ? showContractForm : null} tenants={tenants} onClose={() => setShowContractForm(null)} onSubmit={saveContract} />} />}
+      {page === 'Cobranças' && <Charges items={charges} registerReceipt={registerReceipt} openForm={() => setShowChargeForm({})} form={showChargeForm && <ChargeForm onClose={() => setShowChargeForm(null)} onSubmit={addCharge} />} />}
+      {page === 'Conciliação' && <Reconciliation items={bank} confirm={confirmBankItem} edit={setBankEdit} importStatement={importStatement} inform={inform} form={bankEdit && <BankTransactionForm record={bankEdit} onClose={() => setBankEdit(null)} onSubmit={saveBankItem} />} />}
+      {page === 'Despesas' && <Expenses items={expenses} edit={(record) => setShowExpenseForm(record)} openForm={() => setShowExpenseForm({})} form={showExpenseForm && <ExpenseForm record={showExpenseForm.id ? showExpenseForm : null} categories={expenseCategories} onClose={() => setShowExpenseForm(null)} onSubmit={saveExpense} />} />}
       {page === 'Manutenções' && <Maintenances items={maintenances} openForm={() => setShowMaintenanceForm(true)} form={showMaintenanceForm && <MaintenanceForm onClose={() => setShowMaintenanceForm(false)} onSubmit={addMaintenance} />} />}
-      {page === 'Cadastros' && <Registrations tenants={tenants} bankAccounts={bankAccounts} categories={expenseCategories} openForm={setRegistrationForm} form={registrationForm === 'tenant' ? <TenantForm onClose={() => setRegistrationForm('')} onSubmit={addTenant} /> : registrationForm === 'account' ? <BankAccountForm onClose={() => setRegistrationForm('')} onSubmit={addBankAccount} /> : registrationForm === 'category' ? <ExpenseCategoryForm onClose={() => setRegistrationForm('')} onSubmit={addExpenseCategory} /> : null} />}
+      {page === 'Cadastros' && <Registrations tenants={tenants} bankAccounts={bankAccounts} categories={expenseCategories} openForm={(type, record = null) => setRegistrationForm({ type, record })} form={registrationForm?.type === 'tenant' ? <TenantForm record={registrationForm.record} onClose={() => setRegistrationForm(null)} onSubmit={saveTenant} /> : registrationForm?.type === 'account' ? <BankAccountForm record={registrationForm.record} onClose={() => setRegistrationForm(null)} onSubmit={saveBankAccount} /> : registrationForm?.type === 'category' ? <ExpenseCategoryForm record={registrationForm.record} categories={expenseCategories} onClose={() => setRegistrationForm(null)} onSubmit={saveExpenseCategory} /> : null} />}
       {page === 'Relatórios' && <Reports charges={charges} expenses={expenses} units={initialUnits} />}
     </main>
   </div>;
@@ -264,7 +296,7 @@ function Metric({ label, value, hint, tone }) { return <article className={`metr
 
 function Units() { return <section className="card"><div className="card-title"><div><p className="eyebrow">CADASTRO DO PRÉDIO</p><h2>12 unidades</h2></div><button className="solid-small">Adicionar unidade</button></div><div className="unit-grid">{initialUnits.map((unit) => <article className="unit-card" key={unit.id}><div className="unit-card-top"><span className={`status-dot ${statusClass(unit.status)}`}></span><span>{unit.status}</span></div><h3>{unit.name}</h3><p>{unit.tenant}</p><b>{unit.rent ? `${money(unit.rent)}/mês` : 'Sem contrato ativo'}</b><button className="link-button">Abrir histórico</button></article>)}</div></section>; }
 
-function Contracts({ items, openForm, form }) { return <>{form}<section className="card"><div className="card-title"><div><p className="eyebrow">CONTRATOS</p><h2>Contratos ativos</h2></div><button className="solid-small" onClick={openForm}>Novo contrato</button></div><Table headers={['Unidade', 'Inquilino', 'Início', 'Fim previsto', 'Aluguel', 'Situação']} rows={items.map((item) => [item.unit, item.tenant, item.start, item.end, money(item.rent), <span className="badge pago">{item.status}</span>])} /></section></>; }
+function Contracts({ items, openForm, edit, form }) { return <>{form}<section className="card"><div className="card-title"><div><p className="eyebrow">CONTRATOS</p><h2>Contratos ativos</h2></div><button className="solid-small" onClick={openForm}>Novo contrato</button></div><Table headers={['Unidade', 'Inquilino', 'Início', 'Fim previsto', 'Aluguel', 'Situação', 'Ação']} rows={items.map((item) => [item.unit, item.tenant, item.start, item.end, money(item.rent), <span className="badge pago">{item.status}</span>, <button className="table-action" onClick={() => edit(item)}>Editar</button>])} /></section></>; }
 
 function Charges({ items, registerReceipt, openForm, form }) {
   const [filters, setFilters] = useState({ start: '', end: '', tenant: '' });
@@ -272,17 +304,17 @@ function Charges({ items, registerReceipt, openForm, form }) {
   return <>{form}<section className="card"><div className="card-title"><div><p className="eyebrow">ALUGUÉIS · SET/2026</p><h2>Cobranças</h2></div><button className="solid-small" onClick={openForm}>Nova cobrança</button></div><FilterBar filters={filters} setFilters={setFilters} tenants={items.map((item) => item.tenant)} /><p className="filter-result">{filtered.length} cobrança(s) encontrada(s)</p><Table headers={['Unidade', 'Inquilino', 'Vencimento', 'Valor', 'Situação', 'Recebimento', 'Ação']} rows={filtered.map((item) => [item.unit, item.tenant, item.due, money(item.amount), <span className={`badge ${statusClass(item.status)}`}>{item.status}</span>, item.paidAt || '—', item.status === 'Pago' ? <span className="muted">Confirmado</span> : <button className="table-action" onClick={() => registerReceipt(item.id)}>Registrar recebimento</button>])} /></section></>;
 }
 
-function Reconciliation({ items, confirm, importStatement, inform }) { return <section className="card"><div className="card-title"><div><p className="eyebrow">BANCO INTER</p><h2>Conciliação bancária</h2><small>Importe um CSV com as colunas Data, Descrição e Valor. As transações entram como pendentes para conferência.</small></div><label className="solid-small file-input">Selecionar CSV<input type="file" accept=".csv,text/csv" onChange={importStatement} /></label></div><div className="reconciliation-list">{items.map((item) => <article className="bank-row" key={item.id}><div className={`direction ${item.direction === 'Crédito' ? 'credit' : 'debit'}`}>{item.direction === 'Crédito' ? '↓' : '↑'}</div><div className="bank-main"><b>{item.description}</b><small>{item.date} · {item.direction}</small></div><div className="suggestion">{item.suggestion ? <><small>Sugestão</small><b>{item.suggestion}</b></> : <span className="badge pendente">Sem sugestão</span>}</div><div className="right"><b>{money(item.amount)}</b><span className={`badge ${statusClass(item.state)}`}>{item.state}</span></div>{item.state === 'Sugerida' && <button className="solid-small" onClick={() => confirm(item.id)}>Confirmar</button>}</article>)}</div></section>; }
+function Reconciliation({ items, confirm, edit, importStatement, form }) { return <>{form}<section className="card"><div className="card-title"><div><p className="eyebrow">BANCO INTER</p><h2>Conciliação bancária</h2><small>Importe um CSV com as colunas Data, Descrição e Valor. As transações entram como pendentes para conferência.</small></div><label className="solid-small file-input">Selecionar CSV<input type="file" accept=".csv,text/csv" onChange={importStatement} /></label></div><div className="reconciliation-list">{items.map((item) => <article className="bank-row" key={item.id}><div className={`direction ${item.direction === 'Crédito' ? 'credit' : 'debit'}`}>{item.direction === 'Crédito' ? '↓' : '↑'}</div><div className="bank-main"><b>{item.description}</b><small>{item.date} · {item.direction}</small></div><div className="suggestion">{item.suggestion ? <><small>Sugestão</small><b>{item.suggestion}</b></> : <span className="badge pendente">Sem sugestão</span>}</div><div className="right"><b>{money(item.amount)}</b><span className={`badge ${statusClass(item.state)}`}>{item.state}</span></div><div className="bank-actions">{item.state === 'Sugerida' && <button className="solid-small" onClick={() => confirm(item.id)}>Confirmar</button>}<button className="plain-small" onClick={() => edit(item)}>Editar</button></div></article>)}</div></section></>; }
 
-function Expenses({ items, openForm, form }) {
+function Expenses({ items, openForm, edit, form }) {
   const [filters, setFilters] = useState({ start: '', end: '', category: '' });
   const filtered = items.filter((item) => inRange(dateToIso(item.date), filters.start, filters.end) && (!filters.category || item.category === filters.category));
-  return <>{form}<section className="card"><div className="card-title"><div><p className="eyebrow">PAGAMENTOS E MANUTENÇÃO</p><h2>Despesas</h2></div><button className="solid-small" onClick={openForm}>Lançar despesa</button></div><FilterBar filters={filters} setFilters={setFilters} categories={items.map((item) => item.category)} /><p className="filter-result">{filtered.length} despesa(s) encontrada(s) · {money(filtered.reduce((total, item) => total + item.amount, 0))}</p><Table headers={['Data', 'Descrição', 'Fornecedor', 'Referência', 'Categoria', 'Valor', 'Situação']} rows={filtered.map((item) => [item.date, item.description, item.supplier, item.unit, item.category, money(item.amount), <span className={`badge ${statusClass(item.status)}`}>{item.status}</span>])} /></section></>;
+  return <>{form}<section className="card"><div className="card-title"><div><p className="eyebrow">PAGAMENTOS E MANUTENÇÃO</p><h2>Despesas</h2></div><button className="solid-small" onClick={openForm}>Lançar despesa</button></div><FilterBar filters={filters} setFilters={setFilters} categories={items.map((item) => item.category)} /><p className="filter-result">{filtered.length} despesa(s) encontrada(s) · {money(filtered.reduce((total, item) => total + item.amount, 0))}</p><Table headers={['Data', 'Descrição', 'Fornecedor', 'Referência', 'Categoria', 'Valor', 'Situação', 'Ação']} rows={filtered.map((item) => [item.date, item.description, item.supplier, item.unit, item.category, money(item.amount), <span className={`badge ${statusClass(item.status)}`}>{item.status}</span>, <button className="table-action" onClick={() => edit(item)}>Editar</button>])} /></section></>;
 }
 
 function Maintenances({ items, openForm, form }) { return <>{form}<section className="card"><div className="card-title"><div><p className="eyebrow">OPERAÇÃO DO PRÉDIO</p><h2>Manutenções</h2><small>Acompanhe solicitações, custo estimado e valor efetivamente gasto.</small></div><button className="solid-small" onClick={openForm}>Nova manutenção</button></div><Table headers={['Abertura', 'Solicitação', 'Referência', 'Prioridade', 'Fornecedor', 'Estimado', 'Real', 'Situação']} rows={items.map((item) => [item.openedAt, item.title, item.unit, <span className={`badge priority-${statusClass(item.priority)}`}>{item.priority}</span>, item.supplier, money(item.estimated), money(item.actual), <span className={`badge maintenance-${statusClass(item.status)}`}>{item.status}</span>])} /></section></>; }
 
-function Registrations({ tenants, bankAccounts, categories, openForm, form }) { return <>{form}<section className="registration-grid"><article className="card"><div className="card-title"><div><p className="eyebrow">PESSOAS</p><h2>Inquilinos</h2></div><button className="solid-small" onClick={() => openForm('tenant')}>Novo inquilino</button></div><Table headers={['Nome', 'CPF', 'Telefone', 'Situação']} rows={tenants.map((item) => [item.name, item.cpf || 'Não informado', item.phone || 'Não informado', <span className="badge pago">{item.status}</span>])} /></article><article className="card"><div className="card-title"><div><p className="eyebrow">FINANCEIRO</p><h2>Contas bancárias</h2></div><button className="solid-small" onClick={() => openForm('account')}>Nova conta</button></div><Table headers={['Banco', 'Conta', 'Tipo', 'Situação']} rows={bankAccounts.map((item) => [item.bank, item.account, item.type, <span className="badge pago">{item.status}</span>])} /></article><article className="card"><div className="card-title"><div><p className="eyebrow">FINANCEIRO</p><h2>Categorias de despesa</h2></div><button className="solid-small" onClick={() => openForm('category')}>Nova categoria</button></div><Table headers={['Categoria', 'Descrição', 'Situação']} rows={categories.map((item) => [item.name, item.description || 'Sem descrição', <span className="badge pago">{item.status}</span>])} /></article></section></>; }
+function Registrations({ tenants, bankAccounts, categories, openForm, form }) { const label = (item) => item.parentId ? `${categories.find((parent) => parent.id === Number(item.parentId))?.name || 'Categoria'} › ${item.name}` : item.name; return <>{form}<section className="registration-grid"><article className="card"><div className="card-title"><div><p className="eyebrow">PESSOAS</p><h2>Inquilinos</h2></div><button className="solid-small" onClick={() => openForm('tenant')}>Novo inquilino</button></div><Table headers={['Nome', 'CPF', 'Telefone', 'Situação', 'Ação']} rows={tenants.map((item) => [item.name, item.cpf || 'Não informado', item.phone || 'Não informado', <span className="badge pago">{item.status}</span>, <button className="table-action" onClick={() => openForm('tenant', item)}>Editar</button>])} /></article><article className="card"><div className="card-title"><div><p className="eyebrow">FINANCEIRO</p><h2>Contas bancárias</h2></div><button className="solid-small" onClick={() => openForm('account')}>Nova conta</button></div><Table headers={['Banco', 'Conta', 'Tipo', 'Situação', 'Ação']} rows={bankAccounts.map((item) => [item.bank, item.account, item.type, <span className="badge pago">{item.status}</span>, <button className="table-action" onClick={() => openForm('account', item)}>Editar</button>])} /></article><article className="card"><div className="card-title"><div><p className="eyebrow">FINANCEIRO</p><h2>Categorias e subcategorias</h2></div><button className="solid-small" onClick={() => openForm('category')}>Nova categoria</button></div><Table headers={['Categoria', 'Descrição', 'Situação', 'Ação']} rows={categories.map((item) => [label(item), item.description || 'Sem descrição', <span className="badge pago">{item.status}</span>, <button className="table-action" onClick={() => openForm('category', item)}>Editar</button>])} /></article></section></>; }
 
 function Reports({ charges, expenses, units }) {
   const [filters, setFilters] = useState({ start: '', end: '', tenant: '', category: '' });
@@ -292,7 +324,9 @@ function Reports({ charges, expenses, units }) {
   const expenseTotal = filteredExpenses.reduce((total, item) => total + item.amount, 0);
   const openTotal = filteredCharges.filter((item) => item.status !== 'Pago').reduce((total, item) => total + item.amount, 0);
   const reportUnits = units.filter((unit) => unit.rent && (!filters.tenant || filteredCharges.some((charge) => charge.unit === unit.name)));
-  return <><section className="card report-filter"><div className="card-title"><div><p className="eyebrow">ANÁLISE FINANCEIRA</p><h2>Filtros do relatório</h2></div></div><FilterBar filters={filters} setFilters={setFilters} tenants={charges.map((item) => item.tenant)} categories={expenses.map((item) => item.category)} /></section><section className="metric-grid"><Metric label="Aluguel recebido" value={money(income)} hint="Base caixa" tone="green" /><Metric label="Despesas pagas" value={money(expenseTotal)} hint="Base caixa" tone="orange" /><Metric label="Resultado do mês" value={money(income - expenseTotal)} hint="Cauções excluídas" tone="blue" /><Metric label="Em aberto" value={money(openTotal)} hint={`${filteredCharges.filter((item) => item.status !== 'Pago').length} cobrança(s)`} tone="purple" /></section><section className="card"><div className="card-title"><div><p className="eyebrow">SETEMBRO DE 2026</p><h2>Resultado por unidade</h2></div><button className="plain-small">Exportar CSV</button></div><Table headers={['Unidade', 'Aluguel previsto', 'Manutenção', 'Resultado']} rows={reportUnits.map((unit) => { const maintenance = filteredExpenses.filter((item) => item.unit === unit.name).reduce((total, item) => total + item.amount, 0); return [unit.name, money(unit.rent), money(maintenance), money(unit.rent - maintenance)]; })} /></section></>;
+  const unitRows = reportUnits.map((unit) => { const maintenance = filteredExpenses.filter((item) => item.unit === unit.name).reduce((total, item) => total + item.amount, 0); return [unit.name, unit.rent.toFixed(2).replace('.', ','), maintenance.toFixed(2).replace('.', ','), (unit.rent - maintenance).toFixed(2).replace('.', ',')]; });
+  const exportReport = () => downloadCsv('resultado-financeiro-set-2026.csv', ['Unidade', 'Aluguel previsto', 'Manutenção', 'Resultado'], unitRows);
+  return <><section className="card report-filter"><div className="card-title"><div><p className="eyebrow">ANÁLISE FINANCEIRA</p><h2>Filtros do relatório</h2></div></div><FilterBar filters={filters} setFilters={setFilters} tenants={charges.map((item) => item.tenant)} categories={expenses.map((item) => item.category)} /></section><section className="metric-grid"><Metric label="Aluguel recebido" value={money(income)} hint="Base caixa" tone="green" /><Metric label="Despesas pagas" value={money(expenseTotal)} hint="Base caixa" tone="orange" /><Metric label="Resultado do mês" value={money(income - expenseTotal)} hint="Cauções excluídas" tone="blue" /><Metric label="Em aberto" value={money(openTotal)} hint={`${filteredCharges.filter((item) => item.status !== 'Pago').length} cobrança(s)`} tone="purple" /></section><section className="card"><div className="card-title"><div><p className="eyebrow">SETEMBRO DE 2026</p><h2>Resultado por unidade</h2></div><button className="plain-small" onClick={exportReport}>Exportar CSV</button></div><Table headers={['Unidade', 'Aluguel previsto', 'Manutenção', 'Resultado']} rows={unitRows.map((row) => [row[0], money(Number(row[1].replace(',', '.'))), money(Number(row[2].replace(',', '.'))), money(Number(row[3].replace(',', '.')))])} /></section></>;
 }
 
 function FilterBar({ filters, setFilters, tenants = [], categories = [] }) {
@@ -305,11 +339,12 @@ function Table({ headers, rows }) { return <div className="table-wrap"><table><t
 
 function Modal({ title, children, onClose }) { return <div className="modal-backdrop"><section className="modal"><div className="modal-head"><h2>{title}</h2><button onClick={onClose}>×</button></div>{children}</section></div>; }
 function ChargeForm({ onClose, onSubmit }) { return <Modal title="Nova cobrança" onClose={onClose}><form onSubmit={onSubmit} className="form-grid"><label>Unidade<select name="unit" required>{initialUnits.map((unit) => <option key={unit.id}>{unit.name}</option>)}</select></label><label>Inquilino<input name="tenant" required placeholder="Nome do inquilino" /></label><label>Vencimento<input name="due" required placeholder="dd/mm/aaaa" /></label><label>Valor<input name="amount" required type="number" min="0" step="0.01" placeholder="0,00" /></label><div className="form-actions"><button type="button" className="plain-small" onClick={onClose}>Cancelar</button><button className="solid-small">Salvar cobrança</button></div></form></Modal>; }
-function ExpenseForm({ categories, onClose, onSubmit }) { return <Modal title="Lançar despesa" onClose={onClose}><form onSubmit={onSubmit} className="form-grid"><label>Data<input name="date" required placeholder="dd/mm/aaaa" /></label><label>Valor<input name="amount" required type="number" min="0" step="0.01" placeholder="0,00" /></label><label className="full">Descrição<input name="description" required placeholder="O que foi pago?" /></label><label>Fornecedor ou pessoa<input name="supplier" required placeholder="Nome" /></label><label>Referência<select name="unit"><option>Área comum</option>{initialUnits.map((unit) => <option key={unit.id}>{unit.name}</option>)}</select></label><label>Categoria<select name="category">{categories.filter((item) => item.status === 'Ativa').map((item) => <option key={item.id}>{item.name}</option>)}</select></label><div className="form-actions"><button type="button" className="plain-small" onClick={onClose}>Cancelar</button><button className="solid-small">Salvar despesa</button></div></form></Modal>; }
-function ContractForm({ tenants, onClose, onSubmit }) { return <Modal title="Novo contrato" onClose={onClose}><form onSubmit={onSubmit} className="form-grid"><label>Unidade<select name="unit" required>{initialUnits.map((unit) => <option key={unit.id}>{unit.name}</option>)}</select></label><label>Inquilino titular<select name="tenant" required><option value="">Selecione</option>{tenants.filter((item) => item.status === 'Ativo').map((item) => <option key={item.id}>{item.name}</option>)}</select></label><label>Início<input name="start" required placeholder="dd/mm/aaaa" /></label><label>Fim previsto<input name="end" required placeholder="dd/mm/aaaa" /></label><label>Aluguel mensal<input name="rent" required type="number" min="0" step="0.01" placeholder="0,00" /></label><div className="form-actions"><button type="button" className="plain-small" onClick={onClose}>Cancelar</button><button className="solid-small">Salvar contrato</button></div></form></Modal>; }
+function ExpenseForm({ categories, record, onClose, onSubmit }) { const optionLabel = (item) => item.parentId ? `${categories.find((parent) => parent.id === Number(item.parentId))?.name || 'Categoria'} › ${item.name}` : item.name; return <Modal title={record ? 'Editar despesa' : 'Lançar despesa'} onClose={onClose}><form onSubmit={(event) => onSubmit(event, record)} className="form-grid"><label>Data<input name="date" required defaultValue={record?.date} placeholder="dd/mm/aaaa" /></label><label>Valor<input name="amount" required type="number" min="0" step="0.01" defaultValue={record?.amount} placeholder="0,00" /></label><label className="full">Descrição<input name="description" required defaultValue={record?.description} placeholder="O que foi pago?" /></label><label>Fornecedor ou pessoa<input name="supplier" required defaultValue={record?.supplier} placeholder="Nome" /></label><label>Referência<select name="unit" defaultValue={record?.unit || 'Área comum'}><option>Área comum</option>{initialUnits.map((unit) => <option key={unit.id}>{unit.name}</option>)}</select></label><label>Categoria<select name="category" defaultValue={record?.category}>{categories.filter((item) => item.status === 'Ativa').map((item) => <option key={item.id} value={optionLabel(item)}>{optionLabel(item)}</option>)}</select></label><label>Situação<select name="status" defaultValue={record?.status || 'Pendente'}><option>Pendente</option><option>Conciliada</option><option>Paga</option></select></label><div className="form-actions"><button type="button" className="plain-small" onClick={onClose}>Cancelar</button><button className="solid-small">Salvar despesa</button></div></form></Modal>; }
+function ContractForm({ tenants, record, onClose, onSubmit }) { return <Modal title={record ? 'Editar contrato' : 'Novo contrato'} onClose={onClose}><form onSubmit={(event) => onSubmit(event, record)} className="form-grid"><label>Unidade<select name="unit" required defaultValue={record?.unit}>{initialUnits.map((unit) => <option key={unit.id}>{unit.name}</option>)}</select></label><label>Inquilino titular<select name="tenant" required defaultValue={record?.tenant || ''}><option value="">Selecione</option>{tenants.filter((item) => item.status === 'Ativo').map((item) => <option key={item.id}>{item.name}</option>)}</select></label><label>Início<input name="start" required defaultValue={record?.start} placeholder="dd/mm/aaaa" /></label><label>Fim previsto<input name="end" required defaultValue={record?.end} placeholder="dd/mm/aaaa" /></label><label>Aluguel mensal<input name="rent" required type="number" min="0" step="0.01" defaultValue={record?.rent} placeholder="0,00" /></label><label>Situação<select name="status" defaultValue={record?.status || 'Ativo'}><option>Ativo</option><option>Encerrado</option><option>Cancelado</option></select></label><div className="form-actions"><button type="button" className="plain-small" onClick={onClose}>Cancelar</button><button className="solid-small">Salvar contrato</button></div></form></Modal>; }
 function MaintenanceForm({ onClose, onSubmit }) { return <Modal title="Nova manutenção" onClose={onClose}><form onSubmit={onSubmit} className="form-grid"><label>Data de abertura<input name="openedAt" required placeholder="dd/mm/aaaa" /></label><label>Referência<select name="unit"><option>Área comum</option>{initialUnits.map((unit) => <option key={unit.id}>{unit.name}</option>)}</select></label><label className="full">Solicitação<input name="title" required placeholder="Descreva o problema ou serviço" /></label><label>Prioridade<select name="priority"><option>Baixa</option><option>Média</option><option>Alta</option></select></label><label>Fornecedor ou responsável<input name="supplier" placeholder="A definir" /></label><label>Custo estimado<input name="estimated" type="number" min="0" step="0.01" placeholder="0,00" /></label><div className="form-actions"><button type="button" className="plain-small" onClick={onClose}>Cancelar</button><button className="solid-small">Salvar manutenção</button></div></form></Modal>; }
-function TenantForm({ onClose, onSubmit }) { return <Modal title="Novo inquilino" onClose={onClose}><form onSubmit={onSubmit} className="form-grid"><label className="full">Nome completo<input name="name" required placeholder="Nome do inquilino" /></label><label>CPF<input name="cpf" placeholder="000.000.000-00" /></label><label>Telefone<input name="phone" placeholder="(00) 00000-0000" /></label><label className="full">E-mail<input name="email" type="email" placeholder="nome@exemplo.com" /></label><div className="form-actions"><button type="button" className="plain-small" onClick={onClose}>Cancelar</button><button className="solid-small">Salvar inquilino</button></div></form></Modal>; }
-function BankAccountForm({ onClose, onSubmit }) { return <Modal title="Nova conta bancária" onClose={onClose}><form onSubmit={onSubmit} className="form-grid"><label>Banco<input name="bank" required placeholder="Nome do banco" /></label><label>Tipo<select name="type"><option>Conta corrente</option><option>Conta pagamento</option><option>Poupança</option></select></label><label className="full">Identificação da conta<input name="account" required placeholder="Agência e conta ou apelido" /></label><div className="form-actions"><button type="button" className="plain-small" onClick={onClose}>Cancelar</button><button className="solid-small">Salvar conta</button></div></form></Modal>; }
-function ExpenseCategoryForm({ onClose, onSubmit }) { return <Modal title="Nova categoria de despesa" onClose={onClose}><form onSubmit={onSubmit} className="form-grid"><label>Nome da categoria<input name="name" required placeholder="Ex.: Pintura" /></label><label className="full">Descrição<input name="description" placeholder="Quando esta categoria deve ser usada?" /></label><div className="form-actions"><button type="button" className="plain-small" onClick={onClose}>Cancelar</button><button className="solid-small">Salvar categoria</button></div></form></Modal>; }
+function TenantForm({ record, onClose, onSubmit }) { return <Modal title={record ? 'Editar inquilino' : 'Novo inquilino'} onClose={onClose}><form onSubmit={(event) => onSubmit(event, record)} className="form-grid"><label className="full">Nome completo<input name="name" required defaultValue={record?.name} placeholder="Nome do inquilino" /></label><label>CPF<input name="cpf" defaultValue={record?.cpf} placeholder="000.000.000-00" /></label><label>Telefone<input name="phone" defaultValue={record?.phone} placeholder="(00) 00000-0000" /></label><label className="full">E-mail<input name="email" type="email" defaultValue={record?.email} placeholder="nome@exemplo.com" /></label><label>Situação<select name="status" defaultValue={record?.status || 'Ativo'}><option>Ativo</option><option>Inativo</option></select></label><div className="form-actions"><button type="button" className="plain-small" onClick={onClose}>Cancelar</button><button className="solid-small">Salvar inquilino</button></div></form></Modal>; }
+function BankAccountForm({ record, onClose, onSubmit }) { return <Modal title={record ? 'Editar conta bancária' : 'Nova conta bancária'} onClose={onClose}><form onSubmit={(event) => onSubmit(event, record)} className="form-grid"><label>Banco<input name="bank" required defaultValue={record?.bank} placeholder="Nome do banco" /></label><label>Tipo<select name="type" defaultValue={record?.type || 'Conta corrente'}><option>Conta corrente</option><option>Conta pagamento</option><option>Poupança</option></select></label><label className="full">Identificação da conta<input name="account" required defaultValue={record?.account} placeholder="Agência e conta ou apelido" /></label><label>Situação<select name="status" defaultValue={record?.status || 'Ativa'}><option>Ativa</option><option>Inativa</option></select></label><div className="form-actions"><button type="button" className="plain-small" onClick={onClose}>Cancelar</button><button className="solid-small">Salvar conta</button></div></form></Modal>; }
+function ExpenseCategoryForm({ categories, record, onClose, onSubmit }) { return <Modal title={record ? 'Editar categoria' : 'Nova categoria de despesa'} onClose={onClose}><form onSubmit={(event) => onSubmit(event, record)} className="form-grid"><label>Nome da categoria<input name="name" required defaultValue={record?.name} placeholder="Ex.: Pintura" /></label><label>Categoria principal<select name="parentId" defaultValue={record?.parentId || ''}><option value="">Esta é uma categoria principal</option>{categories.filter((item) => !item.parentId && item.id !== record?.id).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label className="full">Descrição<input name="description" defaultValue={record?.description} placeholder="Quando esta categoria deve ser usada?" /></label><label>Situação<select name="status" defaultValue={record?.status || 'Ativa'}><option>Ativa</option><option>Inativa</option></select></label><div className="form-actions"><button type="button" className="plain-small" onClick={onClose}>Cancelar</button><button className="solid-small">Salvar categoria</button></div></form></Modal>; }
+function BankTransactionForm({ record, onClose, onSubmit }) { return <Modal title="Editar transação bancária" onClose={onClose}><form onSubmit={onSubmit} className="form-grid"><label>Data<input name="date" required defaultValue={record.date} placeholder="dd/mm/aaaa" /></label><label>Valor<input name="amount" type="number" required min="0" step="0.01" defaultValue={record.amount} /></label><label className="full">Descrição<input name="description" required defaultValue={record.description} /></label><label>Tipo<select name="direction" defaultValue={record.direction}><option>Crédito</option><option>Débito</option></select></label><label>Situação<select name="state" defaultValue={record.state}><option>Pendente</option><option>Sugerida</option><option>Conciliada</option></select></label><div className="form-actions"><button type="button" className="plain-small" onClick={onClose}>Cancelar</button><button className="solid-small">Salvar transação</button></div></form></Modal>; }
 
 createRoot(document.getElementById('root')).render(<App />);
