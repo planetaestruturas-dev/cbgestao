@@ -25,9 +25,19 @@ O código será imutável, por exemplo `KN-01` a `KN-12`. O nome de exibição p
 
 ### Contrato
 
-`id`, `numero`, `unidade_id`, `inicio`, `fim_previsto`, `valor_aluguel`, `dia_vencimento`, `multa_percentual`, `juros_percentual_mes`, `indice_reajuste`, `status`, `observacoes`.
+`id`, `numero`, `unidade_id`, `inicio`, `fim_previsto`, `valor_aluguel`, `dia_vencimento`, `multiplicador_multa_rescisoria`, `multa_percentual`, `juros_percentual_mes`, `indice_reajuste`, `status`, `observacoes`.
 
 Uma tabela associativa `contrato_inquilino` permite mais de um inquilino e define quem é o titular da cobrança.
+
+### Distrato
+
+`id`, `contrato_id`, `data_distrato`, `fim_previsto_original`, `dias_totais`, `dias_restantes`, `multiplicador_multa`, `multa_calculada`, `multa_final`, `motivo`, `criado_em`.
+
+O valor final pode ser ajustado pelo administrador, preservando o cálculo original para auditoria. O distrato gera uma cobrança de multa e cancela somente as cobranças futuras em aberto do contrato.
+
+### Anexo de contrato
+
+`id`, `contrato_id`, `nome_original`, `chave_armazenamento_privado`, `mime_type`, `tamanho_bytes`, `enviado_em`, `enviado_por`.
 
 ### Cobrança
 
