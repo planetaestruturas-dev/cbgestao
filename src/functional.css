@@ -34,3 +34,6 @@
 .report-option span { color: #547f72; font-size: 11px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
 .report-option b { font-size: 16px; }
 .report-option small { color: #71827d; }
+.subnav { display: flex; gap: 8px; margin-bottom: 22px; border-bottom: 1px solid #dce8e3; }
+.subnav button { border: 0; border-bottom: 2px solid transparent; padding: 10px 4px; background: transparent; color: #657a73; font: inherit; font-size: 13px; font-weight: 800; cursor: pointer; }
+.subnav button.active { border-color: #2d7563; color: #1d5e50; }

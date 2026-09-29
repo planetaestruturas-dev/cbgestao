@@ -13,6 +13,7 @@
 - RF-06: impedir dois contratos ativos que se sobreponham para a mesma unidade.
 - RF-07: gerar cobranças mensais para cada contrato ativo. Uma cobrança só será criada se seu vencimento calculado estiver dentro do período do contrato; o sistema evita duplicar competência já gerada.
 - RF-08: permitir alteração pontual de uma cobrança sem mudar o contrato, com motivo registrado.
+- RF-08.4: permitir editar e cancelar uma cobrança; o cancelamento preserva o histórico e retira seu efeito dos indicadores financeiros.
 - RF-08.1: registrar cada recebimento com valor efetivamente pago, data de recebimento e informações/identificador do pagamento; em pagamento parcial, encerrar a cobrança original como substituída por saldo e gerar uma nova fatura com o valor restante e vencimento informado.
 - RF-08.2: quando o valor informado divergir do saldo da cobrança, exigir a classificação do ajuste: desconto concedido, pagamento parcial ou multa e juros aplicados; registrar o valor da diferença separadamente para auditoria e relatórios.
 - RF-08.3: em recebimentos com multa, juros ou outro acréscimo, discriminar o valor extra e sua referência, como competência, motivo ou tipo de encargo.
@@ -36,6 +37,7 @@
 
 - RF-17.1: cadastrar e editar fornecedores com nome, documento, telefone, categoria principal e situação; despesas devem selecionar um fornecedor cadastrado.
 - RF-18: lançar despesa com data de inclusão, vencimento, data de pagamento quando quitada, valor, fornecedor ou beneficiário, descrição, categoria, forma de pagamento e comprovante.
+- RF-18.1: permitir editar e cancelar despesas sem exclusão física; despesas canceladas não compõem resultados e relatórios financeiros.
 - RF-19: vincular a despesa a uma kitnet, a área comum ou a múltiplas unidades por rateio documentado.
 - RF-20: registrar solicitação de manutenção, prioridade, status, responsável e datas, sem valores financeiros próprios.
 - RF-21: vincular uma ou mais despesas a uma manutenção aberta; o custo da manutenção será a soma das despesas vinculadas.
