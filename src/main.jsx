@@ -66,6 +66,13 @@ const initialExpenses = [];
 
 const bankItems = [];
 
+const accessProfiles = {
+  Administrador: { label: 'Administrador', pages: ['Visão geral', 'Unidades', 'Contratos', 'Cobranças', 'Conciliação', 'Despesas', 'Manutenções', 'Distratos', 'Cadastros', 'Relatórios', 'Backups'] },
+  Financeiro: { label: 'Financeiro', pages: ['Visão geral', 'Contratos', 'Cobranças', 'Conciliação', 'Despesas', 'Distratos', 'Relatórios'] },
+  Operação: { label: 'Operação', pages: ['Visão geral', 'Unidades', 'Manutenções', 'Relatórios'] },
+  Consulta: { label: 'Consulta', pages: ['Visão geral', 'Relatórios'] },
+};
+
 const referenceData = () => ({
   charges: structuredClone(initialCharges),
   expenses: structuredClone(initialExpenses),
@@ -119,6 +126,11 @@ const parseDate = (value) => String(value).includes('-') ? new Date(`${value}T12
 const formatBrDate = (value) => value.toLocaleDateString('pt-BR');
 const dateInputValue = () => new Date().toISOString().slice(0, 10);
 const timestampLabel = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value));
+const hashPassword = async (password) => {
+  const bytes = new TextEncoder().encode(password);
+  const digest = await window.crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, '0')).join('');
+};
 const isOpenCharge = (item) => !['Pago', 'Cancelada', 'Substituída por saldo'].includes(item.status);
 const terminationCalculation = (contract, terminationValue) => {
   if (!contract || !terminationValue) return { totalDays: 0, remainingDays: 0, calculatedPenalty: 0 };
@@ -163,6 +175,8 @@ function App() {
   const [suppliers, setSuppliers] = useStoredState('cb-gestao:fornecedores', initialSuppliers);
   const [expenseCategories, setExpenseCategories] = useStoredState('cb-gestao:categorias-despesa', initialExpenseCategories);
   const [restorePoints, setRestorePoints] = useStoredState('cb-gestao:pontos-restauracao', []);
+  const [users, setUsers] = useStoredState('cb-gestao:usuarios', []);
+  const [session, setSession] = useStoredState('cb-gestao:sessao', null);
   const [notice, setNotice] = useState('');
   const [showChargeForm, setShowChargeForm] = useState(null);
   const [receiptCharge, setReceiptCharge] = useState(null);
@@ -174,6 +188,7 @@ function App() {
   const [bankEdit, setBankEdit] = useState(null);
   const [showTerminationForm, setShowTerminationForm] = useState(null);
   const [tenantProfile, setTenantProfile] = useState(null);
+  const activeUser = users.find((user) => user.id === session?.userId && user.status === 'Ativo');
 
   const income = useMemo(() => charges.reduce((sum, item) => sum + (item.status === 'Cancelada' ? 0 : item.receivedAmount ?? (item.status === 'Pago' ? item.amount : 0)), 0), [charges]);
   const paidExpenses = useMemo(() => expenses.filter((item) => item.status !== 'Cancelada').reduce((sum, item) => sum + item.amount, 0), [expenses]);
@@ -186,10 +201,47 @@ function App() {
   };
 
   const navigate = (next) => {
+    if (!accessProfiles[activeUser?.role]?.pages.includes(next)) return;
     setPage(next);
     setShowChargeForm(false);
     setReceiptCharge(null);
     setShowExpenseForm(false);
+  };
+
+  const createInitialAdministrator = async (data) => {
+    const passwordHash = await hashPassword(data.password);
+    const user = { id: `user-${Date.now()}`, name: data.name, email: data.email.toLowerCase(), role: 'Administrador', status: 'Ativo', passwordHash, createdAt: new Date().toISOString() };
+    setUsers([user]);
+    setSession({ userId: user.id });
+  };
+  const authenticate = async (email, password) => {
+    const passwordHash = await hashPassword(password);
+    const user = users.find((item) => item.email.toLowerCase() === email.toLowerCase() && item.passwordHash === passwordHash && item.status === 'Ativo');
+    if (!user) return false;
+    setSession({ userId: user.id });
+    return true;
+  };
+  const saveUser = async (event, record) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const email = String(form.get('email')).trim().toLowerCase();
+    const password = String(form.get('password') || '');
+    if (users.some((item) => item.id !== record?.id && item.email.toLowerCase() === email)) {
+      inform('Já existe um usuário com este e-mail.');
+      return;
+    }
+    if (!record && password.length < 8) {
+      inform('A senha inicial deve ter pelo menos 8 caracteres.');
+      return;
+    }
+    if (password && password.length < 8) {
+      inform('A nova senha deve ter pelo menos 8 caracteres.');
+      return;
+    }
+    const next = { ...(record || {}), id: record?.id || `user-${Date.now()}`, name: form.get('name'), email, role: form.get('role'), status: form.get('status'), passwordHash: password ? await hashPassword(password) : record?.passwordHash, createdAt: record?.createdAt || new Date().toISOString() };
+    setUsers((items) => record ? items.map((item) => item.id === record.id ? next : item) : [...items, next]);
+    setRegistrationForm(null);
+    inform(record ? 'Usuário e permissões atualizados.' : 'Usuário cadastrado com perfil de acesso.');
   };
 
   const currentData = () => ({
@@ -504,12 +556,13 @@ function App() {
     inform(record ? 'Categoria atualizada.' : 'Categoria cadastrada.');
   };
 
-  const menu = ['Visão geral', 'Unidades', 'Contratos', 'Cobranças', 'Conciliação', 'Despesas', 'Manutenções', 'Distratos', 'Cadastros', 'Relatórios', 'Backups'];
+  if (!activeUser) return <Authentication hasUsers={users.length > 0} onSetup={createInitialAdministrator} onLogin={authenticate} />;
+  const menu = accessProfiles[activeUser.role]?.pages || [];
   return <div className="app-shell">
     <aside className="sidebar">
       <div className="brand"><img src="/logo-cb.png" alt="CB Gestão" /></div>
       <nav>{menu.map((item) => <button className={page === item ? 'nav-item active' : 'nav-item'} key={item} onClick={() => navigate(item)}>{item}</button>)}</nav>
-      <div className="sidebar-bottom"><span className="avatar">F</span><div><b>Fabi</b><small>Administrador</small></div></div>
+      <div className="sidebar-bottom"><span className="avatar">{activeUser.name.slice(0, 1).toUpperCase()}</span><div><b>{activeUser.name}</b><small>{activeUser.role}</small></div><button className="logout-button" onClick={() => setSession(null)}>Sair</button></div>
     </aside>
     <main className="main">
       <header><div><p className="eyebrow">SETEMBRO DE 2026</p><h1>{page}</h1></div><button className="import-button" onClick={() => navigate('Conciliação')}>Importar extrato</button></header>
@@ -522,11 +575,32 @@ function App() {
       {page === 'Despesas' && <Expenses items={expenses} maintenances={maintenances} edit={(record) => setShowExpenseForm(record)} cancel={cancelExpense} openForm={() => setShowExpenseForm({})} form={showExpenseForm && <ExpenseForm record={showExpenseForm.id ? showExpenseForm : null} categories={expenseCategories} suppliers={suppliers} maintenances={maintenances} onClose={() => setShowExpenseForm(null)} onSubmit={saveExpense} />} />}
       {page === 'Manutenções' && <Maintenances items={maintenances} expenses={expenses} openForm={() => setShowMaintenanceForm({})} edit={setShowMaintenanceForm} showReport={setMaintenanceReport} form={<>{showMaintenanceForm && <MaintenanceForm record={showMaintenanceForm.id ? showMaintenanceForm : null} onClose={() => setShowMaintenanceForm(null)} onSubmit={saveMaintenance} />}{maintenanceReport && <MaintenanceDetailReport maintenance={maintenanceReport} expenses={expenses.filter((item) => String(item.maintenanceId) === String(maintenanceReport.id))} onClose={() => setMaintenanceReport(null)} />}</>} />}
       {page === 'Distratos' && <Terminations items={terminations} openForm={() => setShowTerminationForm({})} edit={setShowTerminationForm} form={showTerminationForm && <TerminationForm record={showTerminationForm.id ? showTerminationForm : null} contracts={contracts} onClose={() => setShowTerminationForm(null)} onSubmit={saveTermination} />} />}
-      {page === 'Cadastros' && <Registrations tenants={tenants} contracts={contracts} bankAccounts={bankAccounts} suppliers={suppliers} categories={expenseCategories} profile={tenantProfile} closeProfile={() => setTenantProfile(null)} openProfile={setTenantProfile} openForm={(type, record = null) => setRegistrationForm({ type, record })} form={registrationForm?.type === 'tenant' ? <TenantForm record={registrationForm.record} onClose={() => setRegistrationForm(null)} onSubmit={saveTenant} /> : registrationForm?.type === 'account' ? <BankAccountForm record={registrationForm.record} onClose={() => setRegistrationForm(null)} onSubmit={saveBankAccount} /> : registrationForm?.type === 'supplier' ? <SupplierForm record={registrationForm.record} onClose={() => setRegistrationForm(null)} onSubmit={saveSupplier} /> : registrationForm?.type === 'category' ? <ExpenseCategoryForm record={registrationForm.record} categories={expenseCategories} onClose={() => setRegistrationForm(null)} onSubmit={saveExpenseCategory} /> : null} />}
+      {page === 'Cadastros' && <Registrations tenants={tenants} contracts={contracts} bankAccounts={bankAccounts} suppliers={suppliers} categories={expenseCategories} users={users} isAdministrator={activeUser.role === 'Administrador'} profile={tenantProfile} closeProfile={() => setTenantProfile(null)} openProfile={setTenantProfile} openForm={(type, record = null) => setRegistrationForm({ type, record })} form={registrationForm?.type === 'tenant' ? <TenantForm record={registrationForm.record} onClose={() => setRegistrationForm(null)} onSubmit={saveTenant} /> : registrationForm?.type === 'account' ? <BankAccountForm record={registrationForm.record} onClose={() => setRegistrationForm(null)} onSubmit={saveBankAccount} /> : registrationForm?.type === 'supplier' ? <SupplierForm record={registrationForm.record} onClose={() => setRegistrationForm(null)} onSubmit={saveSupplier} /> : registrationForm?.type === 'category' ? <ExpenseCategoryForm record={registrationForm.record} categories={expenseCategories} onClose={() => setRegistrationForm(null)} onSubmit={saveExpenseCategory} /> : registrationForm?.type === 'user' ? <UserForm record={registrationForm.record} onClose={() => setRegistrationForm(null)} onSubmit={saveUser} /> : null} />}
       {page === 'Relatórios' && <Reports charges={charges} expenses={expenses} suppliers={suppliers} maintenances={maintenances} units={initialUnits} />}
       {page === 'Backups' && <Backups points={restorePoints} createPoint={saveRestorePoint} restorePoint={restorePoint} exportBackup={exportBackup} resetToReferenceData={resetToReferenceData} />}
     </main>
   </div>;
+}
+
+function Authentication({ hasUsers, onSetup, onLogin }) {
+  const [error, setError] = useState('');
+  const submitSetup = async (event) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const password = String(form.get('password') || '');
+    if (password.length < 8 || password !== form.get('confirmPassword')) {
+      setError('Use uma senha de ao menos 8 caracteres e confirme-a corretamente.');
+      return;
+    }
+    await onSetup({ name: String(form.get('name')).trim(), email: String(form.get('email')).trim(), password });
+  };
+  const submitLogin = async (event) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const authenticated = await onLogin(String(form.get('email')), String(form.get('password')));
+    if (!authenticated) setError('E-mail, senha ou situação do usuário inválidos.');
+  };
+  return <main className="auth-shell"><section className="auth-card"><img src="/logo-cb.png" alt="CB Gestão" /><div><p className="eyebrow">ACESSO RESTRITO</p><h1>{hasUsers ? 'Entrar no CB Gestão' : 'Criar credenciamento inicial'}</h1><p>{hasUsers ? 'Use suas credenciais para acessar o sistema.' : 'Defina o primeiro administrador. Ele poderá cadastrar os demais usuários e níveis de acesso.'}</p></div><form className="form-grid auth-form" onSubmit={hasUsers ? submitLogin : submitSetup}>{!hasUsers && <label>Nome completo<input name="name" required placeholder="Responsável pelo sistema" /></label>}<label>E-mail<input name="email" type="email" required placeholder="nome@empresa.com" /></label><label>Senha<input name="password" type="password" required minLength="8" placeholder="Mínimo de 8 caracteres" /></label>{!hasUsers && <label>Confirmar senha<input name="confirmPassword" type="password" required minLength="8" placeholder="Repita a senha" /></label>}{error && <p className="auth-error">{error}</p>}<button className="solid-small auth-submit">{hasUsers ? 'Entrar' : 'Criar administrador'}</button></form><p className="auth-note">Nesta versão, as credenciais ficam protegidas por hash e armazenadas neste navegador. A autenticação centralizada por servidor será a próxima etapa para acesso seguro entre dispositivos.</p></section></main>;
 }
 
 function Dashboard({ income, expenses, openCharges, occupancy, pendingBank, navigate }) {
@@ -576,7 +650,12 @@ function MaintenanceDetailReport({ maintenance, expenses, onClose }) { const tot
 
 function Terminations({ items, openForm, edit, form }) { return <>{form}<section className="card"><div className="card-title"><div><p className="eyebrow">ENCERRAMENTO DE CONTRATOS</p><h2>Distratos</h2><small>O distrato encerra o contrato, cancela cobranças futuras em aberto e cria a cobrança da multa rescisória.</small></div><button className="solid-small" onClick={openForm}>Novo distrato</button></div><Table headers={['Inquilino', 'Unidade', 'Data do distrato', 'Vencimento da multa', 'Término original', 'Dias restantes', 'Multa final', 'Ação']} rows={items.map((item) => [item.tenant, item.unit, item.terminationDate, item.penaltyDue || item.terminationDate, item.originalEnd, `${item.remainingDays} de ${item.totalDays}`, money(item.finalPenalty), <button className="table-action" onClick={() => edit(item)}>Editar distrato</button>])} /></section></>; }
 
-function Registrations({ tenants, contracts, suppliers, categories, openForm, form, profile, closeProfile, openProfile }) { const [section, setSection] = useState('tenant'); const label = (item) => item.parentId ? `${categories.find((parent) => parent.id === Number(item.parentId))?.name || 'Categoria'} › ${item.name}` : item.name; const body = section === 'tenant' ? <><div className="card-title"><div><p className="eyebrow">PESSOAS</p><h2>Inquilinos</h2></div><button className="solid-small" onClick={() => openForm('tenant')}>Novo inquilino</button></div><Table headers={['Nome', 'CPF', 'Telefone', 'Situação', 'Ações']} rows={tenants.map((item) => [item.name, item.cpf || 'Não informado', item.phone || 'Não informado', <span className="badge pago">{item.status}</span>, <span className="row-actions"><button className="table-action" onClick={() => openProfile(item)}>Ver cadastro</button><button className="plain-small" onClick={() => openForm('tenant', item)}>Editar</button></span>])} /></> : section === 'supplier' ? <><div className="card-title"><div><p className="eyebrow">PARCEIROS</p><h2>Fornecedores</h2></div><button className="solid-small" onClick={() => openForm('supplier')}>Novo fornecedor</button></div><Table headers={['Nome', 'Categoria', 'Telefone', 'Situação', 'Ação']} rows={suppliers.map((item) => [item.name, item.category || 'Não informada', item.phone || 'Não informado', <span className="badge pago">{item.status}</span>, <button className="table-action" onClick={() => openForm('supplier', item)}>Editar</button>])} /></> : <><div className="card-title"><div><p className="eyebrow">FINANCEIRO</p><h2>Categorias e subcategorias</h2></div><button className="solid-small" onClick={() => openForm('category')}>Nova categoria</button></div><Table headers={['Categoria', 'Descrição', 'Situação', 'Ação']} rows={categories.map((item) => [label(item), item.description || 'Sem descrição', <span className="badge pago">{item.status}</span>, <button className="table-action" onClick={() => openForm('category', item)}>Editar</button>])} /></>; return <>{form}{profile && <TenantProfile tenant={profile} contracts={contracts.filter((item) => item.tenant === profile.name)} onClose={closeProfile} />}<section className="card"><div className="subnav"><button className={section === 'tenant' ? 'active' : ''} onClick={() => setSection('tenant')}>Inquilinos</button><button className={section === 'supplier' ? 'active' : ''} onClick={() => setSection('supplier')}>Fornecedores</button><button className={section === 'category' ? 'active' : ''} onClick={() => setSection('category')}>Categorias de despesas</button></div>{body}</section></>; }
+function Registrations({ tenants, contracts, suppliers, categories, users, isAdministrator, openForm, form, profile, closeProfile, openProfile }) {
+  const [section, setSection] = useState('tenant');
+  const label = (item) => item.parentId ? `${categories.find((parent) => parent.id === Number(item.parentId))?.name || 'Categoria'} › ${item.name}` : item.name;
+  const body = section === 'tenant' ? <><div className="card-title"><div><p className="eyebrow">PESSOAS</p><h2>Inquilinos</h2></div><button className="solid-small" onClick={() => openForm('tenant')}>Novo inquilino</button></div><Table headers={['Nome', 'CPF', 'Telefone', 'Situação', 'Ações']} rows={tenants.map((item) => [item.name, item.cpf || 'Não informado', item.phone || 'Não informado', <span className="badge pago">{item.status}</span>, <span className="row-actions"><button className="table-action" onClick={() => openProfile(item)}>Ver cadastro</button><button className="plain-small" onClick={() => openForm('tenant', item)}>Editar</button></span>])} /></> : section === 'supplier' ? <><div className="card-title"><div><p className="eyebrow">PARCEIROS</p><h2>Fornecedores</h2></div><button className="solid-small" onClick={() => openForm('supplier')}>Novo fornecedor</button></div><Table headers={['Nome', 'Categoria', 'Telefone', 'Situação', 'Ação']} rows={suppliers.map((item) => [item.name, item.category || 'Não informada', item.phone || 'Não informado', <span className="badge pago">{item.status}</span>, <button className="table-action" onClick={() => openForm('supplier', item)}>Editar</button>])} /></> : section === 'category' ? <><div className="card-title"><div><p className="eyebrow">FINANCEIRO</p><h2>Categorias e subcategorias</h2></div><button className="solid-small" onClick={() => openForm('category')}>Nova categoria</button></div><Table headers={['Categoria', 'Descrição', 'Situação', 'Ação']} rows={categories.map((item) => [label(item), item.description || 'Sem descrição', <span className="badge pago">{item.status}</span>, <button className="table-action" onClick={() => openForm('category', item)}>Editar</button>])} /></> : <><div className="card-title"><div><p className="eyebrow">SEGURANÇA</p><h2>Usuários e níveis de acesso</h2><small>Somente administradores podem criar, editar e desativar acessos.</small></div><button className="solid-small" onClick={() => openForm('user')}>Novo usuário</button></div><Table headers={['Nome', 'E-mail', 'Perfil', 'Situação', 'Ação']} rows={users.map((item) => [item.name, item.email, item.role, <span className="badge pago">{item.status}</span>, <button className="table-action" onClick={() => openForm('user', item)}>Editar acesso</button>])} /></>;
+  return <>{form}{profile && <TenantProfile tenant={profile} contracts={contracts.filter((item) => item.tenant === profile.name)} onClose={closeProfile} />}<section className="card"><div className="subnav"><button className={section === 'tenant' ? 'active' : ''} onClick={() => setSection('tenant')}>Inquilinos</button><button className={section === 'supplier' ? 'active' : ''} onClick={() => setSection('supplier')}>Fornecedores</button><button className={section === 'category' ? 'active' : ''} onClick={() => setSection('category')}>Categorias de despesas</button>{isAdministrator && <button className={section === 'user' ? 'active' : ''} onClick={() => setSection('user')}>Usuários e acessos</button>}</div>{body}</section></>;
+}
 
 function TenantProfile({ tenant, contracts, onClose }) { return <Modal title={`Cadastro de ${tenant.name}`} onClose={onClose}><div className="profile-details"><div className="profile-contact"><span><b>CPF</b>{tenant.cpf || 'Não informado'}</span><span><b>Telefone</b>{tenant.phone || 'Não informado'}</span><span><b>E-mail</b>{tenant.email || 'Não informado'}</span><span><b>Situação</b>{tenant.status}</span></div><div><p className="eyebrow">HISTÓRICO CONTRATUAL</p><h3>Contratos e anexos</h3>{contracts.length ? <div className="profile-contracts">{contracts.map((contract) => <article key={contract.id}><b>{contract.unit}</b><small>{contract.start} até {contract.end} · vencimento dia {contract.dueDay || parseBrDate(contract.start).getDate()}</small><small>Multa contratual: {Number(contract.penaltyMultiplier) || 0} × aluguel</small><span>{contract.attachmentName ? `Anexo: ${contract.attachmentName}` : 'Sem anexo cadastrado'}</span>{contract.terminationDate && <em>Distratado em {contract.terminationDate}</em>}</article>)}</div> : <p className="muted">Não há contratos vinculados a este cadastro.</p>}</div></div></Modal>; }
 
@@ -651,6 +730,7 @@ function TerminationForm({ contracts, record, onClose, onSubmit }) {
 }
 function MaintenanceForm({ record, onClose, onSubmit }) { return <Modal title={record ? 'Editar manutenção' : 'Nova manutenção'} onClose={onClose}><form onSubmit={(event) => onSubmit(event, record)} className="form-grid"><label>Data de abertura<input name="openedAt" required type="date" defaultValue={dateFieldValue(record?.openedAt, dateInputValue())} /></label><label>Referência<select name="unit" defaultValue={record?.unit || 'Área comum'}><option>Área comum</option>{initialUnits.map((unit) => <option key={unit.id}>{unit.name}</option>)}</select></label><label className="full">Solicitação<input name="title" required defaultValue={record?.title} placeholder="Descreva o problema ou serviço" /></label><label>Prioridade<select name="priority" defaultValue={record?.priority || 'Média'}><option>Baixa</option><option>Média</option><option>Alta</option></select></label><label>Situação<select name="status" defaultValue={record?.status || 'Aberta'}><option>Aberta</option><option>Em andamento</option><option>Aguardando fornecedor</option><option>Concluída</option><option>Cancelada</option></select></label><label>Fornecedor ou responsável<input name="supplier" defaultValue={record?.supplier} placeholder="A definir" /></label><label className="full">Observações e detalhes<textarea name="observations" defaultValue={record?.observations} placeholder="Descreva o diagnóstico, materiais necessários, acordos com fornecedor, andamento e demais detalhes da manutenção." /></label><p className="form-note">Os custos são lançados exclusivamente em Despesas e vinculados a esta manutenção enquanto ela estiver aberta.</p><div className="form-actions"><button type="button" className="plain-small" onClick={onClose}>Cancelar</button><button className="solid-small">Salvar manutenção</button></div></form></Modal>; }
 function TenantForm({ record, onClose, onSubmit }) { return <Modal title={record ? 'Editar inquilino' : 'Novo inquilino'} onClose={onClose}><form onSubmit={(event) => onSubmit(event, record)} className="form-grid"><label className="full">Nome completo<input name="name" required defaultValue={record?.name} placeholder="Nome do inquilino" /></label><label>CPF<input name="cpf" defaultValue={record?.cpf} placeholder="000.000.000-00" /></label><label>Telefone<input name="phone" defaultValue={record?.phone} placeholder="(00) 00000-0000" /></label><label className="full">E-mail<input name="email" type="email" defaultValue={record?.email} placeholder="nome@exemplo.com" /></label><label>Situação<select name="status" defaultValue={record?.status || 'Ativo'}><option>Ativo</option><option>Inativo</option></select></label><div className="form-actions"><button type="button" className="plain-small" onClick={onClose}>Cancelar</button><button className="solid-small">Salvar inquilino</button></div></form></Modal>; }
+function UserForm({ record, onClose, onSubmit }) { return <Modal title={record ? 'Editar usuário e acesso' : 'Novo usuário'} onClose={onClose}><form onSubmit={(event) => onSubmit(event, record)} className="form-grid"><label className="full">Nome completo<input name="name" required defaultValue={record?.name} placeholder="Nome do usuário" /></label><label className="full">E-mail de acesso<input name="email" required type="email" defaultValue={record?.email} placeholder="nome@empresa.com" /></label><label>Perfil de acesso<select name="role" defaultValue={record?.role || 'Consulta'}>{Object.values(accessProfiles).map((profile) => <option key={profile.label}>{profile.label}</option>)}</select><small>Define as telas que o usuário poderá visualizar.</small></label><label>Situação<select name="status" defaultValue={record?.status || 'Ativo'}><option>Ativo</option><option>Inativo</option></select></label><label className="full">{record ? 'Nova senha (opcional)' : 'Senha inicial'}<input name="password" type="password" required={!record} minLength="8" placeholder={record ? 'Preencha apenas para redefinir' : 'Mínimo de 8 caracteres'} /><small>{record ? 'A senha atual é preservada se este campo ficar vazio.' : 'A senha não será exibida nem armazenada em texto aberto.'}</small></label><div className="form-actions"><button type="button" className="plain-small" onClick={onClose}>Cancelar</button><button className="solid-small">Salvar usuário</button></div></form></Modal>; }
 function BankAccountForm({ record, onClose, onSubmit }) { return <Modal title={record ? 'Editar conta bancária' : 'Nova conta bancária'} onClose={onClose}><form onSubmit={(event) => onSubmit(event, record)} className="form-grid"><label>Banco<input name="bank" required defaultValue={record?.bank} placeholder="Nome do banco" /></label><label>Tipo<select name="type" defaultValue={record?.type || 'Conta corrente'}><option>Conta corrente</option><option>Conta pagamento</option><option>Poupança</option></select></label><label className="full">Identificação da conta<input name="account" required defaultValue={record?.account} placeholder="Agência e conta ou apelido" /></label><label>Situação<select name="status" defaultValue={record?.status || 'Ativa'}><option>Ativa</option><option>Inativa</option></select></label><div className="form-actions"><button type="button" className="plain-small" onClick={onClose}>Cancelar</button><button className="solid-small">Salvar conta</button></div></form></Modal>; }
 function SupplierForm({ record, onClose, onSubmit }) { return <Modal title={record ? 'Editar fornecedor' : 'Novo fornecedor'} onClose={onClose}><form onSubmit={(event) => onSubmit(event, record)} className="form-grid"><label className="full">Nome ou razão social<input name="name" required defaultValue={record?.name} placeholder="Nome do fornecedor" /></label><label>CPF ou CNPJ<input name="document" defaultValue={record?.document} placeholder="Opcional" /></label><label>Telefone<input name="phone" defaultValue={record?.phone} placeholder="(00) 00000-0000" /></label><label>Categoria principal<input name="category" defaultValue={record?.category} placeholder="Ex.: Hidráulica" /></label><label>Situação<select name="status" defaultValue={record?.status || 'Ativo'}><option>Ativo</option><option>Inativo</option></select></label><div className="form-actions"><button type="button" className="plain-small" onClick={onClose}>Cancelar</button><button className="solid-small">Salvar fornecedor</button></div></form></Modal>; }
 function ExpenseCategoryForm({ categories, record, onClose, onSubmit }) { return <Modal title={record ? 'Editar categoria' : 'Nova categoria de despesa'} onClose={onClose}><form onSubmit={(event) => onSubmit(event, record)} className="form-grid"><label>Nome da categoria<input name="name" required defaultValue={record?.name} placeholder="Ex.: Pintura" /></label><label>Categoria principal<select name="parentId" defaultValue={record?.parentId || ''}><option value="">Esta é uma categoria principal</option>{categories.filter((item) => !item.parentId && item.id !== record?.id).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label className="full">Descrição<input name="description" defaultValue={record?.description} placeholder="Quando esta categoria deve ser usada?" /></label><label>Situação<select name="status" defaultValue={record?.status || 'Ativa'}><option>Ativa</option><option>Inativa</option></select></label><div className="form-actions"><button type="button" className="plain-small" onClick={onClose}>Cancelar</button><button className="solid-small">Salvar categoria</button></div></form></Modal>; }
