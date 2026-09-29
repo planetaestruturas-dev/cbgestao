@@ -15,6 +15,7 @@
   .table-wrap td:last-child { border-bottom: 0; }
   .table-wrap td::before { content: attr(data-label); color: #71847e; font-size: 11px; font-weight: 800; letter-spacing: .035em; text-align: left; }
   .table-wrap .badge, .table-wrap .table-action { margin-left: auto; }
+  .row-actions { justify-content: flex-end; flex-wrap: wrap; }
   .reconciliation-list { gap: 10px; }
   .bank-row { border: 1px solid #e2e9e5; border-radius: 10px; padding: 13px; grid-template-columns: 35px 1fr auto; }
   .bank-row .right { grid-column: 2/4; grid-row: 2; text-align: left; display: flex; align-items: center; justify-items: normal; gap: 9px; }

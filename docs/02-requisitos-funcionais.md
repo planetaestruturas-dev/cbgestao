@@ -11,7 +11,7 @@
 
 - RF-05: criar contrato com unidade, inquilino(s), início, fim previsto, valor mensal, dia de vencimento, multa, juros, reajuste, caução e anexos.
 - RF-06: impedir dois contratos ativos que se sobreponham para a mesma unidade.
-- RF-07: gerar cobranças mensais para cada contrato ativo, preservando a competência e o vencimento original.
+- RF-07: gerar cobranças mensais para cada contrato ativo. Uma cobrança só será criada se seu vencimento calculado estiver dentro do período do contrato; o sistema evita duplicar competência já gerada.
 - RF-08: permitir alteração pontual de uma cobrança sem mudar o contrato, com motivo registrado.
 - RF-09: mostrar situação da cobrança como `em aberto`, `parcial`, `paga`, `vencida`, `cancelada` ou `renegociada`.
 - RF-10: avisar sobre contratos próximos do fim e cobranças vencidas.
