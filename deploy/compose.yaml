@@ -1,0 +1,32 @@
+services:
+  api:
+    image: node:22-alpine
+    container_name: cbgestao-api
+    restart: unless-stopped
+    working_dir: /app
+    command: ["node", "index.mjs"]
+    volumes:
+      - /srv/cbgestao/current/server:/app:ro
+      - /srv/cbgestao/auth-data:/data
+    networks:
+      edge:
+        aliases:
+          - cbgestao-api
+
+  web:
+    image: nginx:1.27-alpine
+    container_name: cbgestao-web
+    restart: unless-stopped
+    depends_on:
+      - api
+    volumes:
+      - /srv/cbgestao/current:/usr/share/nginx/html:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      edge:
+        aliases:
+          - cbgestao-web
+
+networks:
+  edge:
+    external: true

@@ -68,7 +68,7 @@ const bankItems = [];
 
 const appPages = ['Visão geral', 'Unidades', 'Contratos', 'Cobranças', 'Conciliação', 'Despesas', 'Manutenções', 'Distratos', 'Cadastros', 'Relatórios', 'Backups'];
 const defaultAccessProfiles = {
-  Administrador: { label: 'Administrador', pages: appPages, status: 'Ativo', system: true },
+  'Administrador Geral': { label: 'Administrador Geral', pages: appPages, status: 'Ativo', system: true },
   Financeiro: { label: 'Financeiro', pages: ['Visão geral', 'Contratos', 'Cobranças', 'Conciliação', 'Despesas', 'Distratos', 'Relatórios'], status: 'Ativo', system: true },
   Operação: { label: 'Operação', pages: ['Visão geral', 'Unidades', 'Manutenções', 'Relatórios'], status: 'Ativo', system: true },
   Consulta: { label: 'Consulta', pages: ['Visão geral', 'Relatórios'], status: 'Ativo', system: true },
@@ -128,10 +128,11 @@ const parseDate = (value) => String(value).includes('-') ? new Date(`${value}T12
 const formatBrDate = (value) => value.toLocaleDateString('pt-BR');
 const dateInputValue = () => new Date().toISOString().slice(0, 10);
 const timestampLabel = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value));
-const hashPassword = async (password) => {
-  const bytes = new TextEncoder().encode(password);
-  const digest = await window.crypto.subtle.digest('SHA-256', bytes);
-  return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, '0')).join('');
+const api = async (path, options = {}) => {
+  const response = await fetch(`/api${path}`, { credentials: 'include', headers: { 'content-type': 'application/json', ...(options.headers || {}) }, ...options });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || 'Não foi possível concluir a solicitação.');
+  return data;
 };
 const isOpenCharge = (item) => !['Pago', 'Cancelada', 'Substituída por saldo'].includes(item.status);
 const terminationCalculation = (contract, terminationValue) => {
@@ -178,9 +179,10 @@ function App() {
   const [suppliers, setSuppliers] = useStoredState('cb-gestao:fornecedores', initialSuppliers);
   const [expenseCategories, setExpenseCategories] = useStoredState('cb-gestao:categorias-despesa', initialExpenseCategories);
   const [restorePoints, setRestorePoints] = useStoredState('cb-gestao:pontos-restauracao', []);
-  const [users, setUsers] = useStoredState('cb-gestao:usuarios', []);
-  const [accessProfiles, setAccessProfiles] = useStoredState('cb-gestao:perfis-acesso', defaultAccessProfiles);
-  const [session, setSession] = useStoredState('cb-gestao:sessao', null);
+  const [users, setUsers] = useState([]);
+  const [accessProfiles, setAccessProfiles] = useState(defaultAccessProfiles);
+  const [session, setSession] = useState(null);
+  const [authReady, setAuthReady] = useState(false);
   const [notice, setNotice] = useState('');
   const [showChargeForm, setShowChargeForm] = useState(null);
   const [receiptCharge, setReceiptCharge] = useState(null);
@@ -192,7 +194,7 @@ function App() {
   const [bankEdit, setBankEdit] = useState(null);
   const [showTerminationForm, setShowTerminationForm] = useState(null);
   const [tenantProfile, setTenantProfile] = useState(null);
-  const signedUser = users.find((user) => user.id === session?.userId && user.status === 'Ativo');
+  const signedUser = session?.user?.status === 'Ativo' ? session.user : null;
   const activeProfile = accessProfiles[signedUser?.role];
   const activeUser = signedUser && activeProfile && (activeProfile.status || 'Ativo') === 'Ativo' ? signedUser : null;
 
@@ -214,42 +216,31 @@ function App() {
     setShowExpenseForm(false);
   };
 
-  const createInitialAdministrator = async (data) => {
-    const passwordHash = await hashPassword(data.password);
-    const user = { id: `user-${Date.now()}`, name: data.name, email: data.email.toLowerCase(), role: 'Administrador', status: 'Ativo', passwordHash, createdAt: new Date().toISOString() };
-    setUsers([user]);
-    setSession({ userId: user.id });
+  const loadAccess = async () => {
+    const current = await api('/auth/me');
+    setSession({ user: current.user });
+    setAccessProfiles(current.profiles || defaultAccessProfiles);
+    if (current.user.role === 'Administrador Geral') setUsers((await api('/users')).users);
   };
-  const authenticate = async (email, password) => {
-    const passwordHash = await hashPassword(password);
-    const user = users.find((item) => item.email.toLowerCase() === email.toLowerCase() && item.passwordHash === passwordHash && item.status === 'Ativo' && (accessProfiles[item.role]?.status || 'Ativo') === 'Ativo');
-    if (!user) return false;
-    setSession({ userId: user.id });
+  useEffect(() => { loadAccess().catch(() => setSession(null)).finally(() => setAuthReady(true)); }, []);
+
+  const authenticate = async (username, pin) => {
+    await api('/auth/login', { method: 'POST', body: JSON.stringify({ username, pin }) });
+    await loadAccess();
     return true;
   };
   const saveUser = async (event, record) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    const email = String(form.get('email')).trim().toLowerCase();
-    const password = String(form.get('password') || '');
-    if (users.some((item) => item.id !== record?.id && item.email.toLowerCase() === email)) {
-      inform('Já existe um usuário com este e-mail.');
-      return;
-    }
-    if (!record && password.length < 8) {
-      inform('A senha inicial deve ter pelo menos 8 caracteres.');
-      return;
-    }
-    if (password && password.length < 8) {
-      inform('A nova senha deve ter pelo menos 8 caracteres.');
-      return;
-    }
-    const next = { ...(record || {}), id: record?.id || `user-${Date.now()}`, name: form.get('name'), email, role: form.get('role'), status: form.get('status'), passwordHash: password ? await hashPassword(password) : record?.passwordHash, createdAt: record?.createdAt || new Date().toISOString() };
-    setUsers((items) => record ? items.map((item) => item.id === record.id ? next : item) : [...items, next]);
+    try {
+      const payload = { name: form.get('name'), username: form.get('username'), email: form.get('email'), role: form.get('role'), status: form.get('status'), pin: form.get('pin') };
+      const result = record ? await api(`/users/${record.id}`, { method: 'PATCH', body: JSON.stringify(payload) }) : await api('/users', { method: 'POST', body: JSON.stringify(payload) });
+      setUsers((items) => record ? items.map((item) => item.id === record.id ? result.user : item) : [...items, result.user]);
+    } catch (error) { inform(error.message); return; }
     setRegistrationForm(null);
     inform(record ? 'Usuário e permissões atualizados.' : 'Usuário cadastrado com perfil de acesso.');
   };
-  const saveAccessProfile = (event, record) => {
+  const saveAccessProfile = async (event, record) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const name = String(form.get('name')).trim();
@@ -259,13 +250,15 @@ function App() {
       inform('Já existe um nível de acesso com este nome.');
       return;
     }
-    if (!pages.length && name !== 'Administrador') {
+    if (!pages.length && name !== 'Administrador Geral') {
       inform('Selecione ao menos uma tela para este nível de acesso.');
       return;
     }
-    const profileName = record?.system ? record.name : name;
-    const next = { ...(record || {}), label: profileName, pages: profileName === 'Administrador' ? appPages : pages, status: form.get('status') || 'Ativo' };
-    setAccessProfiles((items) => ({ ...items, [profileName]: next }));
+    const profileName = record?.name || name;
+    try {
+      const result = record ? await api(`/profiles/${encodeURIComponent(profileName)}`, { method: 'PATCH', body: JSON.stringify({ pages, status: form.get('status') }) }) : await api('/profiles', { method: 'POST', body: JSON.stringify({ name, pages, status: form.get('status') }) });
+      setAccessProfiles(result.profiles);
+    } catch (error) { inform(error.message); return; }
     setRegistrationForm(null);
     inform(record ? 'Nível de acesso atualizado.' : 'Novo nível de acesso criado.');
   };
@@ -279,7 +272,7 @@ function App() {
   };
 
   const currentData = () => ({
-    units, charges, expenses, bank, contracts, maintenances, terminations, tenants, bankAccounts, suppliers, expenseCategories, users, accessProfiles,
+    units, charges, expenses, bank, contracts, maintenances, terminations, tenants, bankAccounts, suppliers, expenseCategories,
   });
   const applyData = (data) => {
     setUnits(data.units || structuredClone(initialUnits));
@@ -293,8 +286,6 @@ function App() {
     setBankAccounts(data.bankAccounts || []);
     setSuppliers(data.suppliers || []);
     setExpenseCategories(data.expenseCategories || []);
-    if (data.users) setUsers(data.users);
-    if (data.accessProfiles) setAccessProfiles(data.accessProfiles);
   };
   useEffect(() => {
     const referenceVersionKey = 'cb-gestao:reference-version';
@@ -593,13 +584,14 @@ function App() {
     inform(record ? 'Categoria atualizada.' : 'Categoria cadastrada.');
   };
 
-  if (!activeUser) return <Authentication hasUsers={users.length > 0} onSetup={createInitialAdministrator} onLogin={authenticate} />;
+  if (!authReady) return <main className="auth-shell"><section className="auth-card"><p>Verificando acesso...</p></section></main>;
+  if (!activeUser) return <Authentication onLogin={authenticate} />;
   const menu = activeProfile?.pages || [];
   return <div className="app-shell">
     <aside className="sidebar">
       <div className="brand"><img src="/logo-cb.png" alt="CB Gestão" /></div>
       <nav>{menu.map((item) => <button className={page === item ? 'nav-item active' : 'nav-item'} key={item} onClick={() => navigate(item)}>{item}</button>)}</nav>
-      <div className="sidebar-bottom"><span className="avatar">{activeUser.name.slice(0, 1).toUpperCase()}</span><div><b>{activeUser.name}</b><small>{activeUser.role}</small></div><button className="logout-button" onClick={() => setSession(null)}>Sair</button></div>
+      <div className="sidebar-bottom"><span className="avatar">{activeUser.name.slice(0, 1).toUpperCase()}</span><div><b>{activeUser.name}</b><small>{activeUser.role}</small></div><button className="logout-button" onClick={() => { api('/auth/logout', { method: 'POST' }).catch(() => {}); setSession(null); }}>Sair</button></div>
     </aside>
     <main className="main">
       <header><div><p className="eyebrow">SETEMBRO DE 2026</p><h1>{page}</h1></div><button className="import-button" onClick={() => navigate('Conciliação')}>Importar extrato</button></header>
@@ -612,34 +604,22 @@ function App() {
       {page === 'Despesas' && <Expenses items={expenses} maintenances={maintenances} edit={(record) => setShowExpenseForm(record)} cancel={cancelExpense} openForm={() => setShowExpenseForm({})} form={showExpenseForm && <ExpenseForm record={showExpenseForm.id ? showExpenseForm : null} units={units} categories={expenseCategories} suppliers={suppliers} maintenances={maintenances} onClose={() => setShowExpenseForm(null)} onSubmit={saveExpense} />} />}
       {page === 'Manutenções' && <Maintenances items={maintenances} expenses={expenses} openForm={() => setShowMaintenanceForm({})} edit={setShowMaintenanceForm} showReport={setMaintenanceReport} form={<>{showMaintenanceForm && <MaintenanceForm record={showMaintenanceForm.id ? showMaintenanceForm : null} units={units} onClose={() => setShowMaintenanceForm(null)} onSubmit={saveMaintenance} />}{maintenanceReport && <MaintenanceDetailReport maintenance={maintenanceReport} expenses={expenses.filter((item) => String(item.maintenanceId) === String(maintenanceReport.id))} onClose={() => setMaintenanceReport(null)} />}</>} />}
       {page === 'Distratos' && <Terminations items={terminations} openForm={() => setShowTerminationForm({})} edit={setShowTerminationForm} form={showTerminationForm && <TerminationForm record={showTerminationForm.id ? showTerminationForm : null} contracts={contracts} onClose={() => setShowTerminationForm(null)} onSubmit={saveTermination} />} />}
-      {page === 'Cadastros' && <Registrations tenants={tenants} contracts={contracts} bankAccounts={bankAccounts} suppliers={suppliers} categories={expenseCategories} users={users} accessProfiles={accessProfiles} isAdministrator={activeUser.role === 'Administrador'} profile={tenantProfile} closeProfile={() => setTenantProfile(null)} openProfile={setTenantProfile} openForm={(type, record = null) => setRegistrationForm({ type, record })} form={registrationForm?.type === 'tenant' ? <TenantForm record={registrationForm.record} onClose={() => setRegistrationForm(null)} onSubmit={saveTenant} /> : registrationForm?.type === 'account' ? <BankAccountForm record={registrationForm.record} onClose={() => setRegistrationForm(null)} onSubmit={saveBankAccount} /> : registrationForm?.type === 'supplier' ? <SupplierForm record={registrationForm.record} onClose={() => setRegistrationForm(null)} onSubmit={saveSupplier} /> : registrationForm?.type === 'category' ? <ExpenseCategoryForm record={registrationForm.record} categories={expenseCategories} onClose={() => setRegistrationForm(null)} onSubmit={saveExpenseCategory} /> : registrationForm?.type === 'user' ? <UserForm record={registrationForm.record} accessProfiles={accessProfiles} onClose={() => setRegistrationForm(null)} onSubmit={saveUser} /> : registrationForm?.type === 'accessProfile' ? <AccessProfileForm record={registrationForm.record} onClose={() => setRegistrationForm(null)} onSubmit={saveAccessProfile} /> : null} />}
+      {page === 'Cadastros' && <Registrations tenants={tenants} contracts={contracts} bankAccounts={bankAccounts} suppliers={suppliers} categories={expenseCategories} users={users} accessProfiles={accessProfiles} isAdministrator={activeUser.role === 'Administrador Geral'} profile={tenantProfile} closeProfile={() => setTenantProfile(null)} openProfile={setTenantProfile} openForm={(type, record = null) => setRegistrationForm({ type, record })} form={registrationForm?.type === 'tenant' ? <TenantForm record={registrationForm.record} onClose={() => setRegistrationForm(null)} onSubmit={saveTenant} /> : registrationForm?.type === 'account' ? <BankAccountForm record={registrationForm.record} onClose={() => setRegistrationForm(null)} onSubmit={saveBankAccount} /> : registrationForm?.type === 'supplier' ? <SupplierForm record={registrationForm.record} onClose={() => setRegistrationForm(null)} onSubmit={saveSupplier} /> : registrationForm?.type === 'category' ? <ExpenseCategoryForm record={registrationForm.record} categories={expenseCategories} onClose={() => setRegistrationForm(null)} onSubmit={saveExpenseCategory} /> : registrationForm?.type === 'user' ? <UserForm record={registrationForm.record} accessProfiles={accessProfiles} onClose={() => setRegistrationForm(null)} onSubmit={saveUser} /> : registrationForm?.type === 'accessProfile' ? <AccessProfileForm record={registrationForm.record} onClose={() => setRegistrationForm(null)} onSubmit={saveAccessProfile} /> : null} />}
       {page === 'Relatórios' && <Reports charges={charges} expenses={expenses} suppliers={suppliers} maintenances={maintenances} units={units} />}
       {page === 'Backups' && <Backups points={restorePoints} createPoint={saveRestorePoint} restorePoint={restorePoint} exportBackup={exportBackup} resetToReferenceData={resetToReferenceData} />}
     </main>
   </div>;
 }
 
-function Authentication({ hasUsers, onSetup, onLogin }) {
+function Authentication({ onLogin }) {
   const [error, setError] = useState('');
-  const [mode, setMode] = useState('login');
-  const submitSetup = async (event) => {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    const password = String(form.get('password') || '');
-    if (password.length < 8 || password !== form.get('confirmPassword')) {
-      setError('Use uma senha de ao menos 8 caracteres e confirme-a corretamente.');
-      return;
-    }
-    await onSetup({ name: String(form.get('name')).trim(), email: String(form.get('email')).trim(), password });
-  };
   const submitLogin = async (event) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    const authenticated = await onLogin(String(form.get('email')), String(form.get('password')));
-    if (!authenticated) setError('E-mail, senha ou situação do usuário inválidos.');
+    try { await onLogin(String(form.get('username')), String(form.get('pin'))); }
+    catch (error) { setError(error.message); }
   };
-  const isSetup = mode === 'setup' && !hasUsers;
-  return <main className="auth-shell"><section className="auth-card"><img src="/logo-cb.png" alt="CB Gestão" /><div><p className="eyebrow">ACESSO RESTRITO</p><h1>{isSetup ? 'Criar credenciamento inicial' : 'Entrar no CB Gestão'}</h1><p>{isSetup ? 'Defina o primeiro administrador. Ele poderá cadastrar os demais usuários e níveis de acesso.' : 'Use suas credenciais para acessar o sistema.'}</p></div><form className="form-grid auth-form" onSubmit={isSetup ? submitSetup : submitLogin}>{isSetup && <label>Nome completo<input name="name" required placeholder="Responsável pelo sistema" /></label>}<label>E-mail<input name="email" type="email" required placeholder="nome@empresa.com" /></label><label>Senha<input name="password" type="password" required minLength="8" placeholder="Mínimo de 8 caracteres" /></label>{isSetup && <label>Confirmar senha<input name="confirmPassword" type="password" required minLength="8" placeholder="Repita a senha" /></label>}{error && <p className="auth-error">{error}</p>}<button className="solid-small auth-submit">{isSetup ? 'Criar administrador' : 'Entrar'}</button></form>{!hasUsers && <button type="button" className="link-button auth-switch" onClick={() => { setMode(isSetup ? 'login' : 'setup'); setError(''); }}>{isSetup ? 'Voltar ao login' : 'Primeiro acesso? Criar administrador'}</button>}<p className="auth-note">Nesta versão, as credenciais ficam protegidas por hash e armazenadas neste navegador. A autenticação centralizada por servidor será a próxima etapa para acesso seguro entre dispositivos.</p></section></main>;
+  return <main className="auth-shell"><section className="auth-card"><img src="/logo-cb.png" alt="CB Gestão" /><div><p className="eyebrow">ACESSO RESTRITO</p><h1>Entrar no CB Gestão</h1><p>Use seu nome de usuário e PIN para acessar o sistema.</p></div><form className="form-grid auth-form" onSubmit={submitLogin}><label>Nome de usuário<input name="username" required autoComplete="username" placeholder="Seu usuário" /></label><label>PIN de 6 dígitos<input name="pin" type="password" inputMode="numeric" pattern="[0-9]{6}" required minLength="6" maxLength="6" autoComplete="current-password" placeholder="••••••" /></label>{error && <p className="auth-error">{error}</p>}<button className="solid-small auth-submit">Entrar</button></form><p className="auth-note">Não há cadastro público. Contas e redefinições de PIN são gerenciadas pelo Administrador Geral.</p></section></main>;
 }
 
 function Dashboard({ income, expenses, openCharges, occupancy, pendingBank, navigate }) {
@@ -770,8 +750,8 @@ function TerminationForm({ contracts, record, onClose, onSubmit }) {
 function MaintenanceForm({ record, units, onClose, onSubmit }) { return <Modal title={record ? 'Editar manutenção' : 'Nova manutenção'} onClose={onClose}><form onSubmit={(event) => onSubmit(event, record)} className="form-grid"><label>Data de abertura<input name="openedAt" required type="date" defaultValue={dateFieldValue(record?.openedAt, dateInputValue())} /></label><label>Referência<select name="unit" defaultValue={record?.unit || 'Área comum'}><option>Área comum</option>{units.map((unit) => <option key={unit.id}>{unit.name}</option>)}</select></label><label className="full">Solicitação<input name="title" required defaultValue={record?.title} placeholder="Descreva o problema ou serviço" /></label><label>Prioridade<select name="priority" defaultValue={record?.priority || 'Média'}><option>Baixa</option><option>Média</option><option>Alta</option></select></label><label>Situação<select name="status" defaultValue={record?.status || 'Aberta'}><option>Aberta</option><option>Em andamento</option><option>Aguardando fornecedor</option><option>Concluída</option><option>Cancelada</option></select></label><label>Fornecedor ou responsável<input name="supplier" defaultValue={record?.supplier} placeholder="A definir" /></label><label className="full">Observações e detalhes<textarea name="observations" defaultValue={record?.observations} placeholder="Descreva o diagnóstico, materiais necessários, acordos com fornecedor, andamento e demais detalhes da manutenção." /></label><p className="form-note">Os custos são lançados exclusivamente em Despesas e vinculados a esta manutenção enquanto ela estiver aberta.</p><div className="form-actions"><button type="button" className="plain-small" onClick={onClose}>Cancelar</button><button className="solid-small">Salvar manutenção</button></div></form></Modal>; }
 function UnitForm({ record, tenants, onClose, onSubmit }) { return <Modal title={`Editar ${record.name}`} onClose={onClose}><form onSubmit={(event) => onSubmit(event, record)} className="form-grid"><label>Identificação da unidade<input name="name" required defaultValue={record.name} placeholder="Ex.: Kitnet 01" /></label><label>Situação<select name="status" defaultValue={record.status}><option>Ocupada</option><option>Vaga</option><option>Em manutenção</option><option>Indisponível</option></select></label><label className="full">Inquilino de referência<select name="tenant" defaultValue={record.tenant === '—' ? '' : record.tenant}><option value="">Sem inquilino</option>{tenants.map((tenant) => <option key={tenant.id}>{tenant.name}</option>)}</select></label><label>Valor mensal de referência<CurrencyInput name="rent" defaultValue={record.rent || 0} /></label><p className="form-note">A edição da unidade não altera contratos, cobranças ou históricos já registrados.</p><div className="form-actions"><button type="button" className="plain-small" onClick={onClose}>Cancelar</button><button className="solid-small">Salvar unidade</button></div></form></Modal>; }
 function TenantForm({ record, onClose, onSubmit }) { return <Modal title={record ? 'Editar inquilino' : 'Novo inquilino'} onClose={onClose}><form onSubmit={(event) => onSubmit(event, record)} className="form-grid"><label className="full">Nome completo<input name="name" required defaultValue={record?.name} placeholder="Nome do inquilino" /></label><label>CPF<input name="cpf" defaultValue={record?.cpf} placeholder="000.000.000-00" /></label><label>Telefone<input name="phone" defaultValue={record?.phone} placeholder="(00) 00000-0000" /></label><label className="full">E-mail<input name="email" type="email" defaultValue={record?.email} placeholder="nome@exemplo.com" /></label><label>Situação<select name="status" defaultValue={record?.status || 'Ativo'}><option>Ativo</option><option>Inativo</option></select></label><div className="form-actions"><button type="button" className="plain-small" onClick={onClose}>Cancelar</button><button className="solid-small">Salvar inquilino</button></div></form></Modal>; }
-function UserForm({ record, accessProfiles, onClose, onSubmit }) { return <Modal title={record ? 'Editar usuário e acesso' : 'Novo usuário'} onClose={onClose}><form onSubmit={(event) => onSubmit(event, record)} className="form-grid"><label className="full">Nome completo<input name="name" required defaultValue={record?.name} placeholder="Nome do usuário" /></label><label className="full">E-mail de acesso<input name="email" required type="email" defaultValue={record?.email} placeholder="nome@empresa.com" /></label><label>Perfil de acesso<select name="role" defaultValue={record?.role || 'Consulta'}>{Object.entries(accessProfiles).filter(([name, profile]) => (profile.status || 'Ativo') === 'Ativo' || name === record?.role).map(([name]) => <option key={name}>{name}</option>)}</select><small>Define as telas que o usuário poderá visualizar.</small></label><label>Situação<select name="status" defaultValue={record?.status || 'Ativo'}><option>Ativo</option><option>Inativo</option></select></label><label className="full">{record ? 'Nova senha (opcional)' : 'Senha inicial'}<input name="password" type="password" required={!record} minLength="8" placeholder={record ? 'Preencha apenas para redefinir' : 'Mínimo de 8 caracteres'} /><small>{record ? 'A senha atual é preservada se este campo ficar vazio.' : 'A senha não será exibida nem armazenada em texto aberto.'}</small></label><div className="form-actions"><button type="button" className="plain-small" onClick={onClose}>Cancelar</button><button className="solid-small">Salvar usuário</button></div></form></Modal>; }
-function AccessProfileForm({ record, onClose, onSubmit }) { const selected = new Set(record?.pages || []); const isAdministrator = record?.name === 'Administrador'; return <Modal title={record ? 'Editar nível de acesso' : 'Novo nível de acesso'} onClose={onClose}><form onSubmit={(event) => onSubmit(event, record)} className="form-grid"><label className="full">Nome do nível<input name="name" required defaultValue={record?.name} readOnly={Boolean(record?.system)} placeholder="Ex.: Gestão predial" /><small>{record?.system ? 'Os níveis padrão não podem ser renomeados.' : 'Use um nome objetivo para facilitar a seleção no cadastro de usuários.'}</small></label><label>Situação<select name="status" defaultValue={record?.status || 'Ativo'}><option>Ativo</option><option>Inativo</option></select></label><div className="full"><p className="eyebrow">TELAS LIBERADAS</p><div className="checkbox-grid">{appPages.map((page) => <label key={page} className="checkbox-option"><input type="checkbox" name="pages" value={page} defaultChecked={isAdministrator || selected.has(page)} disabled={isAdministrator} />{page}</label>)}</div>{isAdministrator && <small>O Administrador mantém acesso completo ao sistema.</small>}</div><div className="form-actions"><button type="button" className="plain-small" onClick={onClose}>Cancelar</button><button className="solid-small">Salvar nível</button></div></form></Modal>; }
+function UserForm({ record, accessProfiles, onClose, onSubmit }) { return <Modal title={record ? 'Editar usuário e acesso' : 'Novo usuário'} onClose={onClose}><form onSubmit={(event) => onSubmit(event, record)} className="form-grid"><label className="full">Nome completo<input name="name" required defaultValue={record?.name} placeholder="Nome do usuário" /></label><label>Nome de usuário<input name="username" required defaultValue={record?.username} readOnly={Boolean(record)} placeholder="Ex.: marcio" /><small>Usado no login e não pode ser alterado depois do cadastro.</small></label><label>E-mail para recuperação<input name="email" required type="email" defaultValue={record?.email} placeholder="nome@empresa.com" /></label><label>Perfil de acesso<select name="role" defaultValue={record?.role || 'Consulta'}>{Object.entries(accessProfiles).filter(([name, profile]) => (profile.status || 'Ativo') === 'Ativo' || name === record?.role).map(([name]) => <option key={name}>{name}</option>)}</select></label><label>Situação<select name="status" defaultValue={record?.status || 'Ativo'}><option>Ativo</option><option>Inativo</option></select></label><label className="full">{record ? 'Novo PIN (opcional)' : 'PIN inicial'}<input name="pin" type="password" inputMode="numeric" pattern="[0-9]{6}" required={!record} minLength="6" maxLength="6" placeholder="6 dígitos numéricos" /><small>{record ? 'Deixe vazio para manter o PIN atual.' : 'O PIN é protegido por hash e nunca é exibido.'}</small></label><div className="form-actions"><button type="button" className="plain-small" onClick={onClose}>Cancelar</button><button className="solid-small">Salvar usuário</button></div></form></Modal>; }
+function AccessProfileForm({ record, onClose, onSubmit }) { const selected = new Set(record?.pages || []); const isAdministrator = record?.name === 'Administrador Geral'; return <Modal title={record ? 'Editar nível de acesso' : 'Novo nível de acesso'} onClose={onClose}><form onSubmit={(event) => onSubmit(event, record)} className="form-grid"><label className="full">Nome do nível<input name="name" required defaultValue={record?.name} readOnly={Boolean(record)} placeholder="Ex.: Gestão predial" /><small>{record ? 'O nome não pode ser alterado depois da criação.' : 'Use um nome objetivo para facilitar a seleção no cadastro de usuários.'}</small></label><label>Situação<select name="status" defaultValue={record?.status || 'Ativo'} disabled={isAdministrator}><option>Ativo</option><option>Inativo</option></select></label><div className="full"><p className="eyebrow">TELAS LIBERADAS</p><div className="checkbox-grid">{appPages.map((page) => <label key={page} className="checkbox-option"><input type="checkbox" name="pages" value={page} defaultChecked={isAdministrator || selected.has(page)} disabled={isAdministrator} />{page}</label>)}</div>{isAdministrator && <small>O Administrador Geral mantém acesso completo ao sistema.</small>}</div><div className="form-actions"><button type="button" className="plain-small" onClick={onClose}>Cancelar</button><button className="solid-small">Salvar nível</button></div></form></Modal>; }
 function BankAccountForm({ record, onClose, onSubmit }) { return <Modal title={record ? 'Editar conta bancária' : 'Nova conta bancária'} onClose={onClose}><form onSubmit={(event) => onSubmit(event, record)} className="form-grid"><label>Banco<input name="bank" required defaultValue={record?.bank} placeholder="Nome do banco" /></label><label>Tipo<select name="type" defaultValue={record?.type || 'Conta corrente'}><option>Conta corrente</option><option>Conta pagamento</option><option>Poupança</option></select></label><label className="full">Identificação da conta<input name="account" required defaultValue={record?.account} placeholder="Agência e conta ou apelido" /></label><label>Situação<select name="status" defaultValue={record?.status || 'Ativa'}><option>Ativa</option><option>Inativa</option></select></label><div className="form-actions"><button type="button" className="plain-small" onClick={onClose}>Cancelar</button><button className="solid-small">Salvar conta</button></div></form></Modal>; }
 function SupplierForm({ record, onClose, onSubmit }) { return <Modal title={record ? 'Editar fornecedor' : 'Novo fornecedor'} onClose={onClose}><form onSubmit={(event) => onSubmit(event, record)} className="form-grid"><label className="full">Nome ou razão social<input name="name" required defaultValue={record?.name} placeholder="Nome do fornecedor" /></label><label>CPF ou CNPJ<input name="document" defaultValue={record?.document} placeholder="Opcional" /></label><label>Telefone<input name="phone" defaultValue={record?.phone} placeholder="(00) 00000-0000" /></label><label>Categoria principal<input name="category" defaultValue={record?.category} placeholder="Ex.: Hidráulica" /></label><label>Situação<select name="status" defaultValue={record?.status || 'Ativo'}><option>Ativo</option><option>Inativo</option></select></label><div className="form-actions"><button type="button" className="plain-small" onClick={onClose}>Cancelar</button><button className="solid-small">Salvar fornecedor</button></div></form></Modal>; }
 function ExpenseCategoryForm({ categories, record, onClose, onSubmit }) { return <Modal title={record ? 'Editar categoria' : 'Nova categoria de despesa'} onClose={onClose}><form onSubmit={(event) => onSubmit(event, record)} className="form-grid"><label>Nome da categoria<input name="name" required defaultValue={record?.name} placeholder="Ex.: Pintura" /></label><label>Categoria principal<select name="parentId" defaultValue={record?.parentId || ''}><option value="">Esta é uma categoria principal</option>{categories.filter((item) => !item.parentId && item.id !== record?.id).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label className="full">Descrição<input name="description" defaultValue={record?.description} placeholder="Quando esta categoria deve ser usada?" /></label><label>Situação<select name="status" defaultValue={record?.status || 'Ativa'}><option>Ativa</option><option>Inativa</option></select></label><div className="form-actions"><button type="button" className="plain-small" onClick={onClose}>Cancelar</button><button className="solid-small">Salvar categoria</button></div></form></Modal>; }
