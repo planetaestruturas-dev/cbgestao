@@ -33,7 +33,7 @@
 
 ## Despesas e manutenção
 
-- RF-18: lançar despesa com data, valor, fornecedor ou beneficiário, descrição, categoria, forma de pagamento e comprovante.
+- RF-18: lançar despesa com data de inclusão, vencimento, data de pagamento quando quitada, valor, fornecedor ou beneficiário, descrição, categoria, forma de pagamento e comprovante.
 - RF-19: vincular a despesa a uma kitnet, a área comum ou a múltiplas unidades por rateio documentado.
 - RF-20: registrar solicitação de manutenção, prioridade, status, responsável, datas e custo estimado/real.
 - RF-21: vincular uma ou mais despesas a uma manutenção.
