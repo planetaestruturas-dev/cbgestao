@@ -14,6 +14,10 @@
 .badge.maintenance-em-andamento { color: #315f9e; background: #e9f0ff; }
 .badge.maintenance-aberta { color: #98620d; background: #fff2d9; }
 .form-grid label small { display: block; margin-top: 5px; color: #71827d; font-size: 11px; font-weight: 500; }
+.form-grid textarea { min-height: 104px; resize: vertical; border: 1px solid #d7e0db; border-radius: 8px; padding: 11px; font: inherit; color: #21322f; background: #fff; }
+.attachment-list { display: grid; gap: 6px; margin-top: 7px; }
+.attachment-list a { overflow: hidden; padding: 8px 10px; border: 1px solid #dce8e3; border-radius: 7px; color: #1f6f62; font-size: 12px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.unit-doc-count { display: block; margin: -5px 0 10px; color: #71827d; font-size: 11px; }
 .checkbox-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }
 .checkbox-option { display: flex !important; align-items: center; gap: 8px; border: 1px solid #d7e0db; border-radius: 8px; padding: 9px; color: #39544d !important; cursor: pointer; }
 .checkbox-option input { width: auto; margin: 0; }
