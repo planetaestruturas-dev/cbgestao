@@ -11,7 +11,7 @@
 
 - RF-05: criar contrato com unidade, inquilino(s), início, fim previsto, valor mensal, dia de vencimento, multa, juros, reajuste, caução e anexos.
 - RF-06: impedir dois contratos ativos que se sobreponham para a mesma unidade.
-- RF-07: gerar cobranças mensais para cada contrato ativo. Uma cobrança só será criada se seu vencimento calculado estiver dentro do período do contrato; o sistema evita duplicar competência já gerada.
+- RF-07: gerar cobranças mensais para cada contrato ativo. O primeiro vencimento ocorre no dia definido no contrato após completar o primeiro mês de vigência; cobranças abertas podem ser sincronizadas após alterações de valor, vencimento, inquilino ou prazo, sem modificar recebimentos já registrados.
 - RF-08: permitir alteração pontual de uma cobrança sem mudar o contrato, com motivo registrado.
 - RF-08.4: permitir editar e cancelar uma cobrança; o cancelamento preserva o histórico e retira seu efeito dos indicadores financeiros.
 - RF-08.1: registrar cada recebimento com valor efetivamente pago, data de recebimento e informações/identificador do pagamento; em pagamento parcial, encerrar a cobrança original como substituída por saldo e gerar uma nova fatura com o valor restante e vencimento informado.
@@ -22,6 +22,7 @@
 - RF-10.1: permitir registrar distrato dentro do período contratado, encerrar o contrato e cancelar as cobranças futuras ainda em aberto.
 - RF-10.2: calcular a multa rescisória proporcionalmente ao prazo restante: `aluguel mensal × multiplicador contratual × dias restantes / total de dias do contrato`; o multiplicador e o valor final da multa devem ser editáveis e a cobrança da multa deve ficar registrada com vencimento definido no distrato.
 - RF-10.3: manter o contrato de aluguel anexado ao histórico do inquilino, com acesso controlado na implantação com banco de dados.
+- RF-10.4: no distrato, cancelar somente parcelas futuras de aluguel ainda em aberto, gerar cobrança de aluguel proporcional editável (`aluguel mensal ÷ 30 × dias de ocupação no mês`) e permitir definir o tratamento da caução recebida: manter em posse, devolver integral/parcialmente ou compensar débitos.
 
 ## Banco Inter e conciliação
 
@@ -54,6 +55,6 @@
 - RF-26: autenticar usuários e aplicar permissões por perfil.
 - RF-27: registrar auditoria de criação, edição, exclusão lógica, importação e conciliação.
 - RF-28: anexar documentos em armazenamento privado e limitar seu acesso aos usuários autorizados.
-- RF-29: realizar cópia de segurança diária do banco de dados e validar restauração periodicamente.
+- RF-29: disponibilizar backup geral exportável, pontos de restauração compartilhados, importação de backup e cópia consistente da base na infraestrutura; validar restauração periodicamente.
 - RF-30: formatar todos os campos monetários de entrada como Real brasileiro (`R$` e duas casas decimais), mantendo o valor numérico para cálculos e exportações.
 - RF-31: utilizar seletor de calendário em todos os campos de data editáveis, com armazenamento e exibição padronizada em `dd/mm/aaaa`.

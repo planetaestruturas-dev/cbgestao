@@ -1,59 +1,56 @@
 # Arquitetura e implantação
 
-## Arquitetura proposta
+## Arquitetura implantada
 
 ```text
 Navegador
     │ HTTPS
-Aplicação web
-    ├── Autenticação e permissões
-    ├── API de contratos, financeiro e manutenção
-    ├── Processador de importação e conciliação
-    ├── Banco de dados PostgreSQL
-    └── Armazenamento privado de anexos
+Nginx (container web)
+    ├── React/Vite (interface)
+    └── API Node.js (container privado)
+          ├── Autenticação, perfis e sessões
+          ├── Base SQLite persistente compartilhada
+          ├── Trilha de auditoria por alteração de conjunto de dados
+          └── Dados e anexos armazenados no volume protegido da VPS
 ```
 
-## Stack recomendada
+## Stack em produção
 
 | Camada | Proposta | Motivo |
 | --- | --- | --- |
-| Aplicação | Next.js com TypeScript | Interface e API em um projeto, boa manutenção. |
-| Banco de dados | PostgreSQL | Integridade transacional e relatórios financeiros confiáveis. |
-| Acesso a dados | Prisma ou Drizzle | Migrações versionadas e tipagem. |
-| Autenticação | Auth.js ou provedor compatível | Perfis e sessões seguras. |
-| Arquivos | Armazenamento S3 compatível | Contratos e comprovantes privados. |
-| Hospedagem | Hostinger com ambiente compatível a Node.js ou VPS | Implantação a validar conforme o plano contratado. |
+| Interface | React + Vite | Aplicação responsiva entregue como arquivos estáticos. |
+| API | Node.js 22 | Autenticação, perfis e persistência de dados. |
+| Banco de dados | SQLite em volume persistente da VPS | Base única, transações, WAL e verificação de integridade. |
+| Autenticação | PIN com hash scrypt e cookie HTTP-only | Sessões com expiração e bloqueio após tentativas inválidas. |
+| Hospedagem | Hostinger VPS com Docker Compose e Nginx | HTTPS e implantação por releases com symlink `current`. |
 
 ## Repositório GitHub
 
-Quando iniciar a implementação, criar um repositório privado com:
+O repositório GitHub já está ativo e contém:
 
 ```text
-app/
-  src/
-  prisma/
-  tests/
-  docs/
-  .github/workflows/
+src/                 interface
+server/              API, autenticação e base compartilhada
+docs/                documentação funcional e técnica
 ```
 
-O repositório terá proteção na branch principal, revisão de mudanças, variáveis de ambiente fora do código, migrações versionadas e pipeline de testes/lint antes de publicação.
+Dados operacionais, documentos pessoais, exportações de extrato, backups e segredos permanecem fora do GitHub.
 
 ## Implantação Hostinger
 
-A decisão entre hospedagem Node.js gerenciada e VPS deve ocorrer após conferir o plano Hostinger disponível. A implantação precisa garantir:
+Implantação atual na VPS:
 
 - domínio com HTTPS;
-- banco PostgreSQL gerenciado ou serviço compatível com backup;
-- variáveis de ambiente configuradas no painel, nunca no Git;
-- execução de migrações controlada;
-- armazenamento privado para anexos;
-- backups diários e teste de restauração;
+- volume persistente `/srv/cbgestao/auth-data` para autenticação e base SQLite;
+- releases em `/srv/cbgestao/releases` e ativação por `/srv/cbgestao/current`;
+- diretório de backups com permissões restritas em `/srv/cbgestao/backups`;
+- cópia consistente SQLite via `VACUUM INTO`, acompanhada do arquivo de autenticação;
+- validação de integridade SQLite após reinício;
 - monitoramento de disponibilidade e erros.
 
 ## Segurança e LGPD
 
-O sistema armazenará dados pessoais e financeiros. Por isso deverá aplicar mínimo privilégio, HTTPS, senhas com hash, sessão expirada, logs de auditoria, anexos privados e backups protegidos. Dados de extrato devem ser acessíveis apenas a usuários autorizados. Documentos e registros devem ter política de retenção definida antes da entrada em produção.
+O sistema armazena dados pessoais e financeiros. Aplica HTTPS, mínimo privilégio por perfil, PIN com hash, sessão expirada, bloqueio temporário de tentativas inválidas, cookies HTTP-only, logs de auditoria e backups protegidos. Dados de extrato e documentos devem ser acessíveis apenas a usuários autorizados.
 
 ## Fora do código-fonte
 

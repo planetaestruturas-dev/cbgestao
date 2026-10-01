@@ -1,6 +1,6 @@
 # Gestão de Kitnets CB
 
-Documentação funcional e técnica inicial do sistema de gestão das 12 kitnets.
+Documentação funcional e técnica do sistema em produção para gestão das 12 kitnets.
 
 ## Objetivo
 
@@ -15,6 +15,8 @@ Centralizar contratos, cobrança, recebimentos, conciliação do Banco Inter, de
 - Lançamento de despesas e manutenções por unidade ou área comum.
 - Painel financeiro e relatórios mensais de recebimentos, pagamentos e resultado.
 - Importação assistida dos dados da planilha atual.
+- Base única SQLite compartilhada entre usuários autenticados.
+- Backups gerais, pontos de restauração e recuperação por importação.
 
 ## Documentos
 
@@ -25,8 +27,9 @@ Centralizar contratos, cobrança, recebimentos, conciliação do Banco Inter, de
 | [03-modelo-de-dados.md](03-modelo-de-dados.md) | Entidades, relacionamentos e campos principais. |
 | [04-conciliacao-e-importacao.md](04-conciliacao-e-importacao.md) | Importação da planilha e conciliação bancária. |
 | [05-relatorios-e-indicadores.md](05-relatorios-e-indicadores.md) | Painel e relatórios financeiros. |
-| [06-arquitetura-e-implantacao.md](06-arquitetura-e-implantacao.md) | Arquitetura proposta e preparação para GitHub e Hostinger. |
-| [07-plano-de-entrega.md](07-plano-de-entrega.md) | Fases, decisões pendentes e critérios de aceite. |
+| [06-arquitetura-e-implantacao.md](06-arquitetura-e-implantacao.md) | Arquitetura e implantação atuais na VPS. |
+| [07-plano-de-entrega.md](07-plano-de-entrega.md) | Estado de entrega e próximas evoluções. |
+| [08-backup-e-recuperacao.md](08-backup-e-recuperacao.md) | Procedimento de backup, validação e recuperação. |
 
 ## Princípios do sistema
 

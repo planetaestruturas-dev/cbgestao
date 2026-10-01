@@ -31,9 +31,9 @@ Uma tabela associativa `contrato_inquilino` permite mais de um inquilino e defin
 
 ### Distrato
 
-`id`, `contrato_id`, `data_distrato`, `fim_previsto_original`, `dias_totais`, `dias_restantes`, `multiplicador_multa`, `multa_calculada`, `multa_final`, `motivo`, `criado_em`.
+`id`, `contrato_id`, `data_distrato`, `fim_previsto_original`, `dias_totais`, `dias_restantes`, `multiplicador_multa`, `multa_calculada`, `multa_final`, `aluguel_proporcional`, `vencimento_proporcional`, `tratamento_caucao`, `valor_devolvido_caucao`, `data_devolucao_caucao`, `motivo`, `criado_em`.
 
-O valor final pode ser ajustado pelo administrador, preservando o cálculo original para auditoria. O distrato gera uma cobrança de multa e cancela somente as cobranças futuras em aberto do contrato.
+O valor final pode ser ajustado pelo administrador, preservando o cálculo original para auditoria. O distrato gera cobranças de multa e aluguel proporcional, cancela somente parcelas futuras de aluguel em aberto e registra a devolução ou compensação da caução quando aplicável.
 
 ### Anexo de contrato
 
@@ -49,7 +49,7 @@ A competência representa o mês do aluguel. A data do crédito no banco não su
 
 `recebimento`: `id`, `cobranca_id`, `data_recebimento`, `valor`, `meio`, `observacoes`.
 
-`caucao`: `id`, `contrato_id`, `data`, `valor`, `status`, `transacao_bancaria_id`, `observacoes`.
+`caucao`: `id`, `contrato_id`, `data`, `valor`, `status`, `valor_devolvido`, `data_movimentacao`, `transacao_bancaria_id`, `observacoes`.
 
 ### Importação e transação bancária
 
@@ -78,3 +78,4 @@ A competência representa o mês do aluguel. A data do crédito no banco não su
 3. Registros financeiros confirmados não são apagados fisicamente. Correções geram estorno, cancelamento ou ajuste auditável.
 4. Uma transação bancária não pode ser importada duas vezes.
 5. A soma das conciliações de uma transação não pode ultrapassar seu valor absoluto.
+6. A base operacional é única e persistente na VPS; o navegador não é fonte de verdade para cadastros ou lançamentos.

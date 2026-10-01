@@ -12,7 +12,7 @@ O **Gestão de Kitnets CB** será uma aplicação web privada para administrar u
 
 | Perfil | Permissões na primeira versão |
 | --- | --- |
-| Administrador | Acesso completo, configurações, usuários, importações e exclusões lógicas. |
+| Administrador Geral | Acesso completo, usuários, perfis, backups, importações e exclusões lógicas. |
 | Gestor | Opera contratos, cobranças, despesas, manutenção, conciliação e relatórios. |
 | Consulta | Visualiza painel e relatórios, sem alterar dados. |
 
@@ -42,3 +42,7 @@ O **Gestão de Kitnets CB** será uma aplicação web privada para administrar u
 | Caução | Valor recebido como garantia. Não entra na receita de aluguel nem no resultado mensal. |
 | Despesa | Saída de caixa classificada, opcionalmente vinculada a unidade ou área comum. |
 | Resultado de caixa | Recebimentos de aluguel e outras receitas menos despesas pagas no período, excluindo cauções. |
+
+## Estado atual da operação
+
+A aplicação está publicada em VPS e usa uma base SQLite persistente e única para todos os usuários autenticados. A caução é cobrada junto ao contrato, mas permanece como garantia em posse; pode ser devolvida, utilizada em reparos ou compensada com débitos sem compor a receita de aluguel.
