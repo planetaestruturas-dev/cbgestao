@@ -19,9 +19,10 @@ export async function readStore() {
     store.users ||= [];
     store.sessions ||= [];
     store.profiles ||= structuredClone(profiles);
+    store.businessData ||= {};
     return store;
   }
-  catch { return { users: [], sessions: [], profiles }; }
+  catch { return { users: [], sessions: [], profiles, businessData: {} }; }
 }
 export async function writeStore(store) {
   await fs.mkdir(path.dirname(dataFile), { recursive: true });

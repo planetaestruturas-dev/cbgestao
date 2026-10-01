@@ -3,9 +3,10 @@ import { checkPin, makeUser, newSession, profiles as defaultProfiles, publicUser
 
 const port = Number(process.env.PORT || 3001);
 const appPages = defaultProfiles['Administrador Geral'].pages;
+let businessWriteQueue = Promise.resolve();
 const json = (res, status, body, headers = {}) => res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', ...headers }).end(JSON.stringify(body));
 const cookies = (req) => Object.fromEntries((req.headers.cookie || '').split(';').map((part) => part.trim().split('=')).filter(([key]) => key));
-const body = async (req) => new Promise((resolve, reject) => { let raw = ''; req.on('data', (part) => { raw += part; if (raw.length > 1e6) reject(new Error('Payload inválido.')); }); req.on('end', () => { try { resolve(raw ? JSON.parse(raw) : {}); } catch { reject(new Error('JSON inválido.')); } }); });
+const body = async (req) => new Promise((resolve, reject) => { let raw = ''; req.on('data', (part) => { raw += part; if (raw.length > 12 * 1024 * 1024) reject(new Error('Arquivo ou dados muito grandes para processamento.')); }); req.on('end', () => { try { resolve(raw ? JSON.parse(raw) : {}); } catch { reject(new Error('JSON inválido.')); } }); });
 const sessionUser = async (req) => {
   const token = cookies(req).cb_session;
   if (!token) return null;
@@ -17,6 +18,19 @@ const requireAdmin = async (req, res) => {
   const current = await sessionUser(req);
   if (!current?.user || current.user.status !== 'Ativo' || current.user.role !== 'Administrador Geral') { json(res, 403, { error: 'Acesso restrito ao Administrador Geral.' }); return null; }
   return current;
+};
+const saveBusinessValue = (token, key, value) => {
+  const operation = businessWriteQueue.catch(() => {}).then(async () => {
+    const store = await readStore();
+    const session = store.sessions.find((item) => item.token === token && item.expiresAt > Date.now());
+    const user = session && store.users.find((item) => item.id === session.userId);
+    if (!user || user.status !== 'Ativo') throw new Error('Sessão não encontrada.');
+    store.businessData ||= {};
+    store.businessData[key] = value;
+    await writeStore(store);
+  });
+  businessWriteQueue = operation;
+  return operation;
 };
 
 http.createServer(async (req, res) => {
@@ -34,6 +48,17 @@ http.createServer(async (req, res) => {
     }
     if (req.method === 'POST' && url.pathname === '/auth/logout') return json(res, 200, { ok: true }, { 'set-cookie': 'cb_session=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0' });
     if (req.method === 'GET' && url.pathname === '/auth/me') { const current = await sessionUser(req); return current?.user ? json(res, 200, { user: publicUser(current.user), profiles: current.store.profiles || defaultProfiles }) : json(res, 401, { error: 'Sessão não encontrada.' }); }
+    const dataMatch = url.pathname.match(/^\/data\/(.+)$/);
+    if (dataMatch && req.method === 'GET') {
+      const current = await sessionUser(req); if (!current?.user || current.user.status !== 'Ativo') return json(res, 401, { error: 'Sessão não encontrada.' });
+      const key = decodeURIComponent(dataMatch[1]);
+      return json(res, 200, { exists: Object.hasOwn(current.store.businessData || {}, key), value: current.store.businessData?.[key] });
+    }
+    if (dataMatch && req.method === 'PUT') {
+      const current = await sessionUser(req); if (!current?.user || current.user.status !== 'Ativo') return json(res, 401, { error: 'Sessão não encontrada.' });
+      const key = decodeURIComponent(dataMatch[1]); const input = await body(req);
+      await saveBusinessValue(cookies(req).cb_session, key, input.value); return json(res, 200, { ok: true });
+    }
     if (req.method === 'GET' && url.pathname === '/profiles') { const current = await sessionUser(req); return current?.user ? json(res, 200, { profiles: current.store.profiles || defaultProfiles }) : json(res, 401, { error: 'Sessão não encontrada.' }); }
     if (req.method === 'POST' && url.pathname === '/profiles') {
       const current = await requireAdmin(req, res); if (!current) return;

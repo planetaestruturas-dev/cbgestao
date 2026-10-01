@@ -176,7 +176,7 @@ const terminationCalculation = (contract, terminationValue) => {
   };
 };
 
-function useStoredState(key, initialValue) {
+function useStoredState(key, initialValue, remoteEnabled = false) {
   const [value, setValue] = useState(() => {
     try {
       const stored = window.localStorage.getItem(key);
@@ -185,26 +185,42 @@ function useStoredState(key, initialValue) {
       return initialValue;
     }
   });
+  const [remoteLoaded, setRemoteLoaded] = useState(false);
   useEffect(() => {
     window.localStorage.setItem(key, JSON.stringify(value));
   }, [key, value]);
+  useEffect(() => {
+    if (!remoteEnabled) return undefined;
+    let active = true;
+    api(`/data/${encodeURIComponent(key)}`).then((result) => {
+      if (!active) return;
+      if (result.exists) setValue(result.value);
+      setRemoteLoaded(true);
+    }).catch(() => setRemoteLoaded(false));
+    return () => { active = false; };
+  }, [key, remoteEnabled]);
+  useEffect(() => {
+    if (!remoteEnabled || !remoteLoaded) return;
+    api(`/data/${encodeURIComponent(key)}`, { method: 'PUT', body: JSON.stringify({ value }) }).catch(() => {});
+  }, [key, value, remoteEnabled, remoteLoaded]);
   return [value, setValue];
 }
 
 function App() {
   const [page, setPage] = useState('Visão geral');
-  const [units, setUnits] = useStoredState('cb-gestao:unidades', initialUnits);
-  const [charges, setCharges] = useStoredState('cb-gestao:cobrancas', initialCharges);
-  const [expenses, setExpenses] = useStoredState('cb-gestao:despesas', initialExpenses);
-  const [bank, setBank] = useStoredState('cb-gestao:extrato', bankItems);
-  const [contracts, setContracts] = useStoredState('cb-gestao:contratos', initialContracts);
-  const [maintenances, setMaintenances] = useStoredState('cb-gestao:manutencoes', initialMaintenances);
-  const [terminations, setTerminations] = useStoredState('cb-gestao:distratos', initialTerminations);
-  const [tenants, setTenants] = useStoredState('cb-gestao:inquilinos', initialTenants);
-  const [bankAccounts, setBankAccounts] = useStoredState('cb-gestao:contas-bancarias', initialBankAccounts);
-  const [suppliers, setSuppliers] = useStoredState('cb-gestao:fornecedores', initialSuppliers);
-  const [expenseCategories, setExpenseCategories] = useStoredState('cb-gestao:categorias-despesa', initialExpenseCategories);
-  const [restorePoints, setRestorePoints] = useStoredState('cb-gestao:pontos-restauracao', []);
+  const [dataReady, setDataReady] = useState(false);
+  const [units, setUnits] = useStoredState('cb-gestao:unidades', initialUnits, dataReady);
+  const [charges, setCharges] = useStoredState('cb-gestao:cobrancas', initialCharges, dataReady);
+  const [expenses, setExpenses] = useStoredState('cb-gestao:despesas', initialExpenses, dataReady);
+  const [bank, setBank] = useStoredState('cb-gestao:extrato', bankItems, dataReady);
+  const [contracts, setContracts] = useStoredState('cb-gestao:contratos', initialContracts, dataReady);
+  const [maintenances, setMaintenances] = useStoredState('cb-gestao:manutencoes', initialMaintenances, dataReady);
+  const [terminations, setTerminations] = useStoredState('cb-gestao:distratos', initialTerminations, dataReady);
+  const [tenants, setTenants] = useStoredState('cb-gestao:inquilinos', initialTenants, dataReady);
+  const [bankAccounts, setBankAccounts] = useStoredState('cb-gestao:contas-bancarias', initialBankAccounts, dataReady);
+  const [suppliers, setSuppliers] = useStoredState('cb-gestao:fornecedores', initialSuppliers, dataReady);
+  const [expenseCategories, setExpenseCategories] = useStoredState('cb-gestao:categorias-despesa', initialExpenseCategories, dataReady);
+  const [restorePoints, setRestorePoints] = useStoredState('cb-gestao:pontos-restauracao', [], dataReady);
   const [users, setUsers] = useState([]);
   const [accessProfiles, setAccessProfiles] = useState(defaultAccessProfiles);
   const [session, setSession] = useState(null);
@@ -248,8 +264,9 @@ function App() {
     setSession({ user: current.user });
     setAccessProfiles(current.profiles || defaultAccessProfiles);
     if (current.user.role === 'Administrador Geral') setUsers((await api('/users')).users);
+    setDataReady(true);
   };
-  useEffect(() => { loadAccess().catch(() => setSession(null)).finally(() => setAuthReady(true)); }, []);
+  useEffect(() => { loadAccess().catch(() => { setSession(null); setDataReady(false); }).finally(() => setAuthReady(true)); }, []);
 
   const authenticate = async (username, pin) => {
     await api('/auth/login', { method: 'POST', body: JSON.stringify({ username, pin }) });
@@ -345,6 +362,19 @@ function App() {
     applyData(structuredClone(point.data));
     navigate('Visão geral');
     inform(`Dados restaurados do ponto “${point.name}”.`);
+  };
+  const importBackup = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      const backup = JSON.parse(await file.text());
+      if (backup.application !== 'CB Gestão de Kitnets' || !backup.data || typeof backup.data !== 'object') throw new Error('Selecione um arquivo de backup válido da CB Gestão.');
+      applyData(backup.data);
+      if (Array.isArray(backup.restorePoints)) setRestorePoints(backup.restorePoints.slice(0, 30));
+      navigate('Visão geral');
+      inform('Backup importado. Todos os dados atuais foram substituídos pela cópia selecionada.');
+    } catch (error) { inform(error.message || 'Não foi possível importar o backup.'); }
+    finally { event.target.value = ''; }
   };
   const exportBackup = () => {
     const exportedAt = new Date().toISOString();
@@ -662,8 +692,8 @@ function App() {
         {menu.map((item) => <option key={item} value={item}>{item}</option>)}
       </select>
       <nav>{menu.map((item) => <button className={page === item ? 'nav-item active' : 'nav-item'} key={item} onClick={() => navigate(item)}>{item}</button>)}</nav>
-      <div className="sidebar-bottom"><span className="avatar">{activeUser.name.slice(0, 1).toUpperCase()}</span><div><b>{activeUser.name}</b><small>{activeUser.role}</small></div><button className="logout-button" onClick={() => { api('/auth/logout', { method: 'POST' }).catch(() => {}); setSession(null); }}>Sair</button></div>
-      <button className="mobile-logout" onClick={() => { api('/auth/logout', { method: 'POST' }).catch(() => {}); setSession(null); }}>Sair</button>
+      <div className="sidebar-bottom"><span className="avatar">{activeUser.name.slice(0, 1).toUpperCase()}</span><div><b>{activeUser.name}</b><small>{activeUser.role}</small></div><button className="logout-button" onClick={() => { api('/auth/logout', { method: 'POST' }).catch(() => {}); setSession(null); setDataReady(false); }}>Sair</button></div>
+      <button className="mobile-logout" onClick={() => { api('/auth/logout', { method: 'POST' }).catch(() => {}); setSession(null); setDataReady(false); }}>Sair</button>
     </aside>
     <main className="main">
       <header><div><p className="eyebrow">SETEMBRO DE 2026</p><h1>{page}</h1></div><button className="import-button" onClick={() => navigate('Conciliação')}>Importar extrato</button></header>
@@ -678,7 +708,7 @@ function App() {
       {page === 'Distratos' && <Terminations items={terminations} charges={charges} cancel={cancelTermination} openForm={() => setShowTerminationForm({})} edit={setShowTerminationForm} form={showTerminationForm && <TerminationForm record={showTerminationForm.id ? showTerminationForm : null} contracts={contracts} onClose={() => setShowTerminationForm(null)} onSubmit={saveTermination} />} />}
       {page === 'Cadastros' && <Registrations tenants={tenants} contracts={contracts} bankAccounts={bankAccounts} suppliers={suppliers} categories={expenseCategories} users={users} accessProfiles={accessProfiles} isAdministrator={activeUser.role === 'Administrador Geral'} profile={tenantProfile} closeProfile={() => setTenantProfile(null)} openProfile={setTenantProfile} openForm={(type, record = null) => setRegistrationForm({ type, record })} form={registrationForm?.type === 'tenant' ? <TenantForm record={registrationForm.record} onClose={() => setRegistrationForm(null)} onSubmit={saveTenant} /> : registrationForm?.type === 'account' ? <BankAccountForm record={registrationForm.record} onClose={() => setRegistrationForm(null)} onSubmit={saveBankAccount} /> : registrationForm?.type === 'supplier' ? <SupplierForm record={registrationForm.record} onClose={() => setRegistrationForm(null)} onSubmit={saveSupplier} /> : registrationForm?.type === 'category' ? <ExpenseCategoryForm record={registrationForm.record} categories={expenseCategories} onClose={() => setRegistrationForm(null)} onSubmit={saveExpenseCategory} /> : registrationForm?.type === 'user' ? <UserForm record={registrationForm.record} accessProfiles={accessProfiles} onClose={() => setRegistrationForm(null)} onSubmit={saveUser} /> : registrationForm?.type === 'accessProfile' ? <AccessProfileForm record={registrationForm.record} onClose={() => setRegistrationForm(null)} onSubmit={saveAccessProfile} /> : null} />}
       {page === 'Relatórios' && <Reports charges={charges} expenses={expenses} suppliers={suppliers} maintenances={maintenances} units={units} />}
-      {page === 'Backups' && <Backups points={restorePoints} createPoint={saveRestorePoint} restorePoint={restorePoint} exportBackup={exportBackup} />}
+      {page === 'Backups' && <Backups points={restorePoints} createPoint={saveRestorePoint} restorePoint={restorePoint} exportBackup={exportBackup} importBackup={importBackup} />}
     </main>
   </div>;
 }
@@ -753,9 +783,9 @@ function Registrations({ tenants, contracts, suppliers, categories, users, acces
 function AttachmentList({ attachments = [] }) { return attachments.length ? <div className="attachment-list">{attachments.map((attachment) => <a key={attachment.id || attachment.name} href={attachment.dataUrl} download={attachment.name} target="_blank" rel="noreferrer">{attachment.name}</a>)}</div> : <p className="muted">Nenhum anexo arquivado.</p>; }
 function TenantProfile({ tenant, contracts, onClose }) { return <Modal title={`Cadastro de ${tenant.name}`} onClose={onClose}><div className="profile-details"><div className="profile-contact"><span><b>CPF</b>{tenant.cpf || 'Não informado'}</span><span><b>Telefone</b>{tenant.phone || 'Não informado'}</span><span><b>E-mail</b>{tenant.email || 'Não informado'}</span><span><b>Situação</b>{tenant.status}</span></div>{tenant.observations && <div className="maintenance-observations"><p className="eyebrow">OBSERVAÇÕES</p><p>{tenant.observations}</p></div>}<div><p className="eyebrow">DOCUMENTAÇÃO DO INQUILINO</p><AttachmentList attachments={tenant.attachments} /></div><div><p className="eyebrow">HISTÓRICO CONTRATUAL</p><h3>Contratos e anexos</h3>{contracts.length ? <div className="profile-contracts">{contracts.map((contract) => <article key={contract.id}><b>{contract.unit}</b><small>{contract.start} até {contract.end} · vencimento dia {contract.dueDay || parseBrDate(contract.start).getDate()}</small><small>Multa contratual: {Number(contract.penaltyMultiplier) || 0} × aluguel</small><span>{contract.attachmentName ? `Anexo: ${contract.attachmentName}` : 'Sem anexo cadastrado'}</span>{contract.terminationDate && <em>Distratado em {contract.terminationDate}</em>}</article>)}</div> : <p className="muted">Não há contratos vinculados a este cadastro.</p>}</div></div></Modal>; }
 
-function Backups({ points, createPoint, restorePoint, exportBackup }) {
+function Backups({ points, createPoint, restorePoint, exportBackup, importBackup }) {
   const restore = (point) => restorePoint(point);
-  return <><section className="card backup-hero"><div><p className="eyebrow">SEGURANÇA DOS DADOS</p><h2>Backups e pontos de restauração</h2><p>Crie uma cópia antes de testar alterações, restaure um estado anterior quando necessário ou baixe um backup completo do sistema.</p></div><div className="backup-actions"><button className="solid-small" onClick={() => createPoint()}>Criar ponto de restauração</button><button className="plain-small" onClick={exportBackup}>Exportar backup geral</button></div></section><section className="card"><div className="card-title"><div><p className="eyebrow">HISTÓRICO LOCAL</p><h2>Pontos de restauração</h2></div><span className="muted">Até 30 pontos são mantidos neste navegador.</span></div>{points.length ? <Table headers={['Nome', 'Criado em', 'Dados salvos', 'Ação']} rows={points.map((point) => [point.name, timestampLabel(point.createdAt), `${point.data?.charges?.length || 0} cobranças · ${point.data?.expenses?.length || 0} despesas · ${point.data?.contracts?.length || 0} contratos`, <button className="table-action" onClick={() => restore(point)}>Restaurar este ponto</button>])} /> : <p className="muted">Ainda não há pontos de restauração criados.</p>}</section></>;
+  return <><section className="card backup-hero"><div><p className="eyebrow">SEGURANÇA DOS DADOS</p><h2>Backups e pontos de restauração</h2><p>Crie uma cópia antes de testar alterações, restaure um estado anterior quando necessário ou baixe e importe um backup completo do sistema.</p></div><div className="backup-actions"><button className="solid-small" onClick={() => createPoint()}>Criar ponto de restauração</button><button className="plain-small" onClick={exportBackup}>Exportar backup geral</button><label className="plain-small file-input">Importar backup<input type="file" accept="application/json,.json" onChange={importBackup} /></label></div></section><section className="card"><div className="card-title"><div><p className="eyebrow">HISTÓRICO COMPARTILHADO</p><h2>Pontos de restauração</h2></div><span className="muted">Até 30 pontos são mantidos para os usuários do sistema.</span></div>{points.length ? <Table headers={['Nome', 'Criado em', 'Dados salvos', 'Ação']} rows={points.map((point) => [point.name, timestampLabel(point.createdAt), `${point.data?.charges?.length || 0} cobranças · ${point.data?.expenses?.length || 0} despesas · ${point.data?.contracts?.length || 0} contratos`, <button className="table-action" onClick={() => restore(point)}>Restaurar este ponto</button>])} /> : <p className="muted">Ainda não há pontos de restauração criados.</p>}</section></>;
 }
 
 function Reports({ charges, expenses, suppliers, maintenances, units }) {
