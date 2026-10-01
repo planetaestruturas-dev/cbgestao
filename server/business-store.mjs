@@ -1,7 +1,10 @@
 import { DatabaseSync } from 'node:sqlite';
+import { chmodSync } from 'node:fs';
 
 const databaseFile = process.env.BUSINESS_DATABASE_FILE || '/data/cbgestao.sqlite';
+process.umask(0o077);
 const database = new DatabaseSync(databaseFile);
+chmodSync(databaseFile, 0o600);
 
 database.exec(`
   PRAGMA journal_mode = WAL;
