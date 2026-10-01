@@ -1,9 +1,9 @@
 import http from 'node:http';
 import { checkPin, makeUser, newSession, profiles as defaultProfiles, publicUser, readStore, writeStore } from './auth-store.mjs';
+import { businessHealth, readBusinessValue, saveBusinessValue } from './business-store.mjs';
 
 const port = Number(process.env.PORT || 3001);
 const appPages = defaultProfiles['Administrador Geral'].pages;
-let businessWriteQueue = Promise.resolve();
 const json = (res, status, body, headers = {}) => res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', ...headers }).end(JSON.stringify(body));
 const cookies = (req) => Object.fromEntries((req.headers.cookie || '').split(';').map((part) => part.trim().split('=')).filter(([key]) => key));
 const body = async (req) => new Promise((resolve, reject) => { let raw = ''; req.on('data', (part) => { raw += part; if (raw.length > 12 * 1024 * 1024) reject(new Error('Arquivo ou dados muito grandes para processamento.')); }); req.on('end', () => { try { resolve(raw ? JSON.parse(raw) : {}); } catch { reject(new Error('JSON inválido.')); } }); });
@@ -19,24 +19,18 @@ const requireAdmin = async (req, res) => {
   if (!current?.user || current.user.status !== 'Ativo' || current.user.role !== 'Administrador Geral') { json(res, 403, { error: 'Acesso restrito ao Administrador Geral.' }); return null; }
   return current;
 };
-const saveBusinessValue = (token, key, value) => {
-  const operation = businessWriteQueue.catch(() => {}).then(async () => {
-    const store = await readStore();
-    const session = store.sessions.find((item) => item.token === token && item.expiresAt > Date.now());
-    const user = session && store.users.find((item) => item.id === session.userId);
-    if (!user || user.status !== 'Ativo') throw new Error('Sessão não encontrada.');
-    store.businessData ||= {};
-    store.businessData[key] = value;
-    await writeStore(store);
-  });
-  businessWriteQueue = operation;
-  return operation;
+const dataPage = {
+  'cb-gestao:unidades': 'Unidades', 'cb-gestao:cobrancas': 'Cobranças', 'cb-gestao:despesas': 'Despesas',
+  'cb-gestao:extrato': 'Conciliação', 'cb-gestao:contratos': 'Contratos', 'cb-gestao:manutencoes': 'Manutenções',
+  'cb-gestao:distratos': 'Distratos', 'cb-gestao:inquilinos': 'Cadastros', 'cb-gestao:contas-bancarias': 'Cadastros',
+  'cb-gestao:fornecedores': 'Cadastros', 'cb-gestao:categorias-despesa': 'Cadastros', 'cb-gestao:pontos-restauracao': 'Backups',
 };
+const canWriteBusiness = (current, key) => current.user.role === 'Administrador Geral' || Boolean(current.store.profiles?.[current.user.role]?.pages?.includes(dataPage[key]));
 
 http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, 'http://localhost');
-    if (url.pathname === '/health') return json(res, 200, { ok: true });
+    if (url.pathname === '/health') return json(res, businessHealth() ? 200 : 503, { ok: businessHealth(), database: 'sqlite' });
     if (req.method === 'POST' && url.pathname === '/auth/login') {
       const { username, pin } = await body(req); const store = await readStore();
       const user = store.users.find((item) => item.username === String(username || '').trim().toLowerCase());
@@ -52,12 +46,18 @@ http.createServer(async (req, res) => {
     if (dataMatch && req.method === 'GET') {
       const current = await sessionUser(req); if (!current?.user || current.user.status !== 'Ativo') return json(res, 401, { error: 'Sessão não encontrada.' });
       const key = decodeURIComponent(dataMatch[1]);
-      return json(res, 200, { exists: Object.hasOwn(current.store.businessData || {}, key), value: current.store.businessData?.[key] });
+      let value = readBusinessValue(key);
+      if (value === undefined && Object.hasOwn(current.store.businessData || {}, key)) {
+        value = current.store.businessData[key];
+        saveBusinessValue(key, value, 'migração automática');
+      }
+      return json(res, 200, { exists: value !== undefined, value });
     }
     if (dataMatch && req.method === 'PUT') {
       const current = await sessionUser(req); if (!current?.user || current.user.status !== 'Ativo') return json(res, 401, { error: 'Sessão não encontrada.' });
       const key = decodeURIComponent(dataMatch[1]); const input = await body(req);
-      await saveBusinessValue(cookies(req).cb_session, key, input.value); return json(res, 200, { ok: true });
+      if (!Object.hasOwn(dataPage, key) || !canWriteBusiness(current, key)) return json(res, 403, { error: 'Seu nível de acesso não permite alterar estes dados.' });
+      saveBusinessValue(key, input.value, current.user.username); return json(res, 200, { ok: true });
     }
     if (req.method === 'GET' && url.pathname === '/profiles') { const current = await sessionUser(req); return current?.user ? json(res, 200, { profiles: current.store.profiles || defaultProfiles }) : json(res, 401, { error: 'Sessão não encontrada.' }); }
     if (req.method === 'POST' && url.pathname === '/profiles') {

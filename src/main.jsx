@@ -74,20 +74,6 @@ const defaultAccessProfiles = {
   Consulta: { label: 'Consulta', pages: ['Visão geral', 'Relatórios'], status: 'Ativo', system: true },
 };
 
-const referenceData = () => ({
-  units: structuredClone(initialUnits),
-  charges: structuredClone(initialCharges),
-  expenses: structuredClone(initialExpenses),
-  bank: structuredClone(bankItems),
-  contracts: structuredClone(initialContracts),
-  maintenances: structuredClone(initialMaintenances),
-  terminations: structuredClone(initialTerminations),
-  tenants: structuredClone(initialTenants),
-  bankAccounts: structuredClone(initialBankAccounts),
-  suppliers: structuredClone(initialSuppliers),
-  expenseCategories: structuredClone(initialExpenseCategories),
-});
-
 const money = (value) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const currencyValue = (value) => {
   if (typeof value === 'number') return value;
@@ -177,18 +163,8 @@ const terminationCalculation = (contract, terminationValue) => {
 };
 
 function useStoredState(key, initialValue, remoteEnabled = false) {
-  const [value, setValue] = useState(() => {
-    try {
-      const stored = window.localStorage.getItem(key);
-      return stored ? JSON.parse(stored) : initialValue;
-    } catch {
-      return initialValue;
-    }
-  });
+  const [value, setValue] = useState(initialValue);
   const [remoteLoaded, setRemoteLoaded] = useState(false);
-  useEffect(() => {
-    window.localStorage.setItem(key, JSON.stringify(value));
-  }, [key, value]);
   useEffect(() => {
     if (!remoteEnabled) return undefined;
     let active = true;
@@ -334,19 +310,22 @@ function App() {
     setSuppliers(data.suppliers || []);
     setExpenseCategories(data.expenseCategories || []);
   };
-  useEffect(() => {
-    const referenceVersionKey = 'cb-gestao:reference-version';
-    if (window.localStorage.getItem(referenceVersionKey) === '2') return;
-    const point = {
-      id: `restore-${Date.now()}`,
-      name: 'Antes da importação da planilha de referência',
-      createdAt: new Date().toISOString(),
-      data: structuredClone(currentData()),
+  const migrateLegacyBrowserData = () => {
+    const legacyKeyMap = {
+      units: 'cb-gestao:unidades', charges: 'cb-gestao:cobrancas', expenses: 'cb-gestao:despesas', bank: 'cb-gestao:extrato',
+      contracts: 'cb-gestao:contratos', maintenances: 'cb-gestao:manutencoes', terminations: 'cb-gestao:distratos',
+      tenants: 'cb-gestao:inquilinos', bankAccounts: 'cb-gestao:contas-bancarias', suppliers: 'cb-gestao:fornecedores', expenseCategories: 'cb-gestao:categorias-despesa',
     };
-    setRestorePoints((items) => [point, ...items].slice(0, 30));
-    applyData(referenceData());
-    window.localStorage.setItem(referenceVersionKey, '2');
-  }, []);
+    try {
+      const data = Object.fromEntries(Object.entries(legacyKeyMap).map(([field, key]) => [field, JSON.parse(window.localStorage.getItem(key) || 'null')]));
+      if (!Object.values(data).some((value) => Array.isArray(value) && value.length)) throw new Error('Não há dados antigos deste navegador para migrar.');
+      const legacyPoints = JSON.parse(window.localStorage.getItem('cb-gestao:pontos-restauracao') || '[]');
+      applyData(data);
+      if (Array.isArray(legacyPoints) && legacyPoints.length) setRestorePoints(legacyPoints.slice(0, 30));
+      navigate('Visão geral');
+      inform('Dados antigos deste navegador enviados para a base compartilhada. Aguarde alguns segundos antes de sair.');
+    } catch (error) { inform(error.message || 'Não foi possível migrar os dados deste navegador.'); }
+  };
   const saveRestorePoint = (name = 'Ponto de restauração') => {
     const point = {
       id: `restore-${Date.now()}`,
@@ -708,7 +687,7 @@ function App() {
       {page === 'Distratos' && <Terminations items={terminations} charges={charges} cancel={cancelTermination} openForm={() => setShowTerminationForm({})} edit={setShowTerminationForm} form={showTerminationForm && <TerminationForm record={showTerminationForm.id ? showTerminationForm : null} contracts={contracts} onClose={() => setShowTerminationForm(null)} onSubmit={saveTermination} />} />}
       {page === 'Cadastros' && <Registrations tenants={tenants} contracts={contracts} bankAccounts={bankAccounts} suppliers={suppliers} categories={expenseCategories} users={users} accessProfiles={accessProfiles} isAdministrator={activeUser.role === 'Administrador Geral'} profile={tenantProfile} closeProfile={() => setTenantProfile(null)} openProfile={setTenantProfile} openForm={(type, record = null) => setRegistrationForm({ type, record })} form={registrationForm?.type === 'tenant' ? <TenantForm record={registrationForm.record} onClose={() => setRegistrationForm(null)} onSubmit={saveTenant} /> : registrationForm?.type === 'account' ? <BankAccountForm record={registrationForm.record} onClose={() => setRegistrationForm(null)} onSubmit={saveBankAccount} /> : registrationForm?.type === 'supplier' ? <SupplierForm record={registrationForm.record} onClose={() => setRegistrationForm(null)} onSubmit={saveSupplier} /> : registrationForm?.type === 'category' ? <ExpenseCategoryForm record={registrationForm.record} categories={expenseCategories} onClose={() => setRegistrationForm(null)} onSubmit={saveExpenseCategory} /> : registrationForm?.type === 'user' ? <UserForm record={registrationForm.record} accessProfiles={accessProfiles} onClose={() => setRegistrationForm(null)} onSubmit={saveUser} /> : registrationForm?.type === 'accessProfile' ? <AccessProfileForm record={registrationForm.record} onClose={() => setRegistrationForm(null)} onSubmit={saveAccessProfile} /> : null} />}
       {page === 'Relatórios' && <Reports charges={charges} expenses={expenses} suppliers={suppliers} maintenances={maintenances} units={units} />}
-      {page === 'Backups' && <Backups points={restorePoints} createPoint={saveRestorePoint} restorePoint={restorePoint} exportBackup={exportBackup} importBackup={importBackup} />}
+      {page === 'Backups' && <Backups points={restorePoints} createPoint={saveRestorePoint} restorePoint={restorePoint} exportBackup={exportBackup} importBackup={importBackup} migrateLegacyData={migrateLegacyBrowserData} />}
     </main>
   </div>;
 }
@@ -783,9 +762,9 @@ function Registrations({ tenants, contracts, suppliers, categories, users, acces
 function AttachmentList({ attachments = [] }) { return attachments.length ? <div className="attachment-list">{attachments.map((attachment) => <a key={attachment.id || attachment.name} href={attachment.dataUrl} download={attachment.name} target="_blank" rel="noreferrer">{attachment.name}</a>)}</div> : <p className="muted">Nenhum anexo arquivado.</p>; }
 function TenantProfile({ tenant, contracts, onClose }) { return <Modal title={`Cadastro de ${tenant.name}`} onClose={onClose}><div className="profile-details"><div className="profile-contact"><span><b>CPF</b>{tenant.cpf || 'Não informado'}</span><span><b>Telefone</b>{tenant.phone || 'Não informado'}</span><span><b>E-mail</b>{tenant.email || 'Não informado'}</span><span><b>Situação</b>{tenant.status}</span></div>{tenant.observations && <div className="maintenance-observations"><p className="eyebrow">OBSERVAÇÕES</p><p>{tenant.observations}</p></div>}<div><p className="eyebrow">DOCUMENTAÇÃO DO INQUILINO</p><AttachmentList attachments={tenant.attachments} /></div><div><p className="eyebrow">HISTÓRICO CONTRATUAL</p><h3>Contratos e anexos</h3>{contracts.length ? <div className="profile-contracts">{contracts.map((contract) => <article key={contract.id}><b>{contract.unit}</b><small>{contract.start} até {contract.end} · vencimento dia {contract.dueDay || parseBrDate(contract.start).getDate()}</small><small>Multa contratual: {Number(contract.penaltyMultiplier) || 0} × aluguel</small><span>{contract.attachmentName ? `Anexo: ${contract.attachmentName}` : 'Sem anexo cadastrado'}</span>{contract.terminationDate && <em>Distratado em {contract.terminationDate}</em>}</article>)}</div> : <p className="muted">Não há contratos vinculados a este cadastro.</p>}</div></div></Modal>; }
 
-function Backups({ points, createPoint, restorePoint, exportBackup, importBackup }) {
+function Backups({ points, createPoint, restorePoint, exportBackup, importBackup, migrateLegacyData }) {
   const restore = (point) => restorePoint(point);
-  return <><section className="card backup-hero"><div><p className="eyebrow">SEGURANÇA DOS DADOS</p><h2>Backups e pontos de restauração</h2><p>Crie uma cópia antes de testar alterações, restaure um estado anterior quando necessário ou baixe e importe um backup completo do sistema.</p></div><div className="backup-actions"><button className="solid-small" onClick={() => createPoint()}>Criar ponto de restauração</button><button className="plain-small" onClick={exportBackup}>Exportar backup geral</button><label className="plain-small file-input">Importar backup<input type="file" accept="application/json,.json" onChange={importBackup} /></label></div></section><section className="card"><div className="card-title"><div><p className="eyebrow">HISTÓRICO COMPARTILHADO</p><h2>Pontos de restauração</h2></div><span className="muted">Até 30 pontos são mantidos para os usuários do sistema.</span></div>{points.length ? <Table headers={['Nome', 'Criado em', 'Dados salvos', 'Ação']} rows={points.map((point) => [point.name, timestampLabel(point.createdAt), `${point.data?.charges?.length || 0} cobranças · ${point.data?.expenses?.length || 0} despesas · ${point.data?.contracts?.length || 0} contratos`, <button className="table-action" onClick={() => restore(point)}>Restaurar este ponto</button>])} /> : <p className="muted">Ainda não há pontos de restauração criados.</p>}</section></>;
+  return <><section className="card backup-hero"><div><p className="eyebrow">SEGURANÇA DOS DADOS</p><h2>Backups e pontos de restauração</h2><p>As operações usam a base compartilhada do sistema. Crie um ponto antes de alterações importantes, exporte uma cópia completa ou importe um backup para recuperação.</p></div><div className="backup-actions"><button className="solid-small" onClick={() => createPoint()}>Criar ponto de restauração</button><button className="plain-small" onClick={exportBackup}>Exportar backup geral</button><label className="plain-small file-input">Importar backup<input type="file" accept="application/json,.json" onChange={importBackup} /></label><button className="plain-small" onClick={migrateLegacyData}>Migrar dados antigos deste navegador</button></div></section><section className="card"><div className="card-title"><div><p className="eyebrow">HISTÓRICO COMPARTILHADO</p><h2>Pontos de restauração</h2></div><span className="muted">Até 30 pontos são mantidos na base compartilhada.</span></div>{points.length ? <Table headers={['Nome', 'Criado em', 'Dados salvos', 'Ação']} rows={points.map((point) => [point.name, timestampLabel(point.createdAt), `${point.data?.charges?.length || 0} cobranças · ${point.data?.expenses?.length || 0} despesas · ${point.data?.contracts?.length || 0} contratos`, <button className="table-action" onClick={() => restore(point)}>Restaurar este ponto</button>])} /> : <p className="muted">Ainda não há pontos de restauração criados.</p>}</section></>;
 }
 
 function Reports({ charges, expenses, suppliers, maintenances, units }) {
