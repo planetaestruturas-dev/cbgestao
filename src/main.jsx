@@ -830,7 +830,7 @@ function Expenses({ items, maintenances, openForm, edit, cancel, form }) {
   const maintenanceName = (item) => maintenances.find((maintenance) => String(maintenance.id) === String(item.maintenanceId))?.title || 'Não vinculada';
   const sorted = sortRecords(filtered, sort, (item, key) => ({ date: dateToIso(item.date), dueDate: item.dueDate ? dateToIso(item.dueDate) : '', paidAt: item.paidAt ? dateToIso(item.paidAt) : '', description: item.description, supplier: item.supplier, maintenance: maintenanceName(item), unit: item.unit, category: item.category, amount: Number(item.amount) || 0, status: item.status })[key]);
   const toggleSort = (key) => setSort((current) => ({ key, direction: current.key === key && current.direction === 'asc' ? 'desc' : 'asc' }));
-  const columns = [{ label: 'Inclusão', key: 'date' }, { label: 'Vencimento', key: 'dueDate' }, { label: 'Pagamento', key: 'paidAt' }, { label: 'Descrição', key: 'description' }, { label: 'Fornecedor', key: 'supplier' }, { label: 'Manutenção', key: 'maintenance' }, { label: 'Referência', key: 'unit' }, { label: 'Categoria', key: 'category' }, { label: 'Valor', key: 'amount' }, { label: 'Situação', key: 'status' }, { label: 'Ações' }];
+  const columns = [{ label: 'Inclusão', key: 'date' }, { label: 'Vencimento', key: 'dueDate' }, { label: 'Pagamento', key: 'paidAt' }, { label: 'Descrição', key: 'description', className: 'expense-description-column' }, { label: 'Fornecedor', key: 'supplier' }, { label: 'Manutenção', key: 'maintenance' }, { label: 'Referência', key: 'unit' }, { label: 'Categoria', key: 'category' }, { label: 'Valor', key: 'amount' }, { label: 'Situação', key: 'status' }, { label: 'Ações' }];
   const total = sorted.filter((item) => item.status !== 'Cancelada').reduce((sum, item) => sum + item.amount, 0);
   filtered = sorted;
   const filtersView = <FilterBar filters={filters} setFilters={setFilters} categories={items.map((item) => item.category)} />;
@@ -898,8 +898,8 @@ function Table({ headers, columns, rows, sort, onSort }) {
   return <div className="table-wrap"><table><thead><tr>{resolvedColumns.map((column) => {
     const active = sort?.key === column.key;
     const direction = active ? sort.direction : '';
-    return <th key={column.label} aria-sort={active ? (direction === 'asc' ? 'ascending' : 'descending') : undefined}>{column.key && onSort ? <button type="button" className={`table-sort ${active ? 'active' : ''}`} onClick={() => onSort(column.key)}>{column.label}<span aria-hidden="true">{active ? (direction === 'asc' ? '↑' : '↓') : '↕'}</span></button> : column.label}</th>;
-  })}</tr></thead><tbody>{rows.map((row, index) => <tr key={index}>{row.map((cell, cellIndex) => <td data-label={resolvedColumns[cellIndex].label} key={cellIndex}>{cell}</td>)}</tr>)}</tbody></table></div>;
+    return <th key={column.label} className={column.className} aria-sort={active ? (direction === 'asc' ? 'ascending' : 'descending') : undefined}>{column.key && onSort ? <button type="button" className={`table-sort ${active ? 'active' : ''}`} onClick={() => onSort(column.key)}>{column.label}<span aria-hidden="true">{active ? (direction === 'asc' ? '↑' : '↓') : '↕'}</span></button> : column.label}</th>;
+  })}</tr></thead><tbody>{rows.map((row, index) => <tr key={index}>{row.map((cell, cellIndex) => <td className={resolvedColumns[cellIndex].className} data-label={resolvedColumns[cellIndex].label} key={cellIndex}>{cell}</td>)}</tr>)}</tbody></table></div>;
 }
 
 function Modal({ title, children, onClose }) { return <div className="modal-backdrop"><section className="modal"><div className="modal-head"><h2>{title}</h2><button onClick={onClose}>×</button></div>{children}</section></div>; }
