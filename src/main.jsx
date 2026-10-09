@@ -100,8 +100,11 @@ const downloadJson = (fileName, content) => {
   URL.revokeObjectURL(url);
 };
 const dateToIso = (date) => {
-  const [day, month, year] = date.split('/');
-  return `${year}-${month}-${day}`;
+  const value = String(date ?? '').trim();
+  if (!value) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const [day, month, year] = value.split('/');
+  return day && month && year ? `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}` : '';
 };
 const dateFieldValue = (value, fallback = '') => !value ? fallback : String(value).includes('-') ? value : dateToIso(value);
 const inRange = (date, start, end) => (!start || date >= start) && (!end || date <= end);
@@ -120,11 +123,12 @@ const sortRecords = (items, sort, valueOf) => {
 };
 const todayDisplay = () => new Intl.DateTimeFormat('pt-BR').format(new Date());
 const parseBrDate = (value) => {
-  const [day, month, year] = String(value).split('/').map(Number);
+  const normalized = dateToIso(value);
+  const [year, month, day] = normalized.split('-').map(Number);
   return new Date(year, month - 1, day);
 };
 const parseDate = (value) => String(value).includes('-') ? new Date(`${value}T12:00:00`) : parseBrDate(value);
-const formatBrDate = (value) => value.toLocaleDateString('pt-BR');
+const formatBrDate = (value) => value instanceof Date && !Number.isNaN(value.getTime()) ? value.toLocaleDateString('pt-BR') : 'Não informada';
 const dateInputValue = () => new Date().toISOString().slice(0, 10);
 const periodKey = (value) => {
   if (!value) return '';
@@ -885,7 +889,7 @@ function Reports({ charges, expenses, suppliers, maintenances, units }) {
 
 function FilterBar({ filters, setFilters, tenants = [], categories = [], units = [], suppliers = [], statuses = [] }) {
   const update = (key, value) => setFilters({ ...filters, [key]: value });
-  const unique = (values) => [...new Set(values)].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  const unique = (values) => [...new Set(values.filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b), 'pt-BR'));
   return <div className="filter-bar"><label>De<input type="date" value={filters.start} onChange={(event) => update('start', event.target.value)} /></label><label>Até<input type="date" value={filters.end} onChange={(event) => update('end', event.target.value)} /></label>{units.length > 0 && <label>Unidade<select value={filters.unit || ''} onChange={(event) => update('unit', event.target.value)}><option value="">Todas</option>{unique(units).map((unit) => <option key={unit}>{unit}</option>)}</select></label>}{tenants.length > 0 && <label>Inquilino<select value={filters.tenant || ''} onChange={(event) => update('tenant', event.target.value)}><option value="">Todos</option>{unique(tenants).map((tenant) => <option key={tenant}>{tenant}</option>)}</select></label>}{statuses.length > 0 && <label>Situação<select value={filters.status || ''} onChange={(event) => update('status', event.target.value)}><option value="">Todas</option>{unique(statuses).map((status) => <option key={status}>{status}</option>)}</select></label>}{categories.length > 0 && <label>Categoria<select value={filters.category || ''} onChange={(event) => update('category', event.target.value)}><option value="">Todas</option>{unique(categories).map((category) => <option key={category}>{category}</option>)}</select></label>}{suppliers.length > 0 && <label>Fornecedor<select value={filters.supplier || ''} onChange={(event) => update('supplier', event.target.value)}><option value="">Todos</option>{unique(suppliers).map((supplier) => <option key={supplier}>{supplier}</option>)}</select></label>}<button className="clear-filter" type="button" onClick={() => setFilters({ start: '', end: '', tenant: '', category: '', unit: '', supplier: '', status: '' })}>Limpar filtros</button></div>;
 }
 
