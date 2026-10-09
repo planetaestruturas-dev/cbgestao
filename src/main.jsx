@@ -896,7 +896,7 @@ function FilterBar({ filters, setFilters, tenants = [], categories = [], units =
 function Table({ headers = [], columns = [], rows = [], sort, onSort }) {
   const resolvedColumns = columns.length ? columns : headers.map((label) => ({ label }));
   return <div className="table-wrap"><table><thead><tr>{resolvedColumns.map((column) => {
-    const active = sort?.key === column.key;
+    const active = Boolean(column.key && sort?.key === column.key);
     const direction = active ? sort.direction : '';
     return <th key={column.label} className={column.className} aria-sort={active ? (direction === 'asc' ? 'ascending' : 'descending') : undefined}>{column.key && onSort ? <button type="button" className={`table-sort ${active ? 'active' : ''}`} onClick={() => onSort(column.key)}>{column.label}<span aria-hidden="true">{active ? (direction === 'asc' ? '↑' : '↓') : '↕'}</span></button> : column.label}</th>;
   })}</tr></thead><tbody>{rows.map((row, index) => <tr key={index}>{row.map((cell, cellIndex) => <td className={resolvedColumns[cellIndex]?.className} data-label={resolvedColumns[cellIndex]?.label || ''} key={cellIndex}>{cell}</td>)}</tr>)}</tbody></table></div>;
