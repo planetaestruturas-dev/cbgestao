@@ -122,9 +122,17 @@ const currentPeriod = () => {
   const now = new Date();
   return {
     key: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`,
+    year: now.getFullYear(),
     label: new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' }).format(now).toUpperCase(),
   };
 };
+const annualMonthlySeries = (year, items, dateOf, include, valueOf) => Array.from({ length: 12 }, (_, month) => {
+  const key = `${year}-${String(month + 1).padStart(2, '0')}`;
+  return {
+    label: new Intl.DateTimeFormat('pt-BR', { month: 'short' }).format(new Date(year, month, 1)).replace('.', ''),
+    value: items.filter((item) => include(item) && periodKey(dateOf(item)) === key).reduce((sum, item) => sum + valueOf(item), 0),
+  };
+});
 const timestampLabel = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value));
 const maxAttachmentBytes = 1024 * 1024;
 const storedAttachments = async (files, existing = []) => {
@@ -239,9 +247,12 @@ function App() {
   const activeUser = signedUser && activeProfile && (activeProfile.status || 'Ativo') === 'Ativo' ? signedUser : null;
   const dashboardPeriod = currentPeriod();
   const income = useMemo(() => charges.filter((item) => item.type !== 'Caução' && item.status !== 'Cancelada' && periodKey(item.paidAt) === dashboardPeriod.key).reduce((sum, item) => sum + (item.receivedAmount ?? (item.status === 'Pago' ? item.amount : 0)), 0), [charges, dashboardPeriod.key]);
-  const paidExpenses = useMemo(() => expenses.filter((item) => item.status !== 'Cancelada' && periodKey(item.paidAt || item.date) === dashboardPeriod.key).reduce((sum, item) => sum + item.amount, 0), [expenses, dashboardPeriod.key]);
+  const monthlyExpenses = useMemo(() => expenses.filter((item) => item.status !== 'Cancelada' && periodKey(item.date) === dashboardPeriod.key).reduce((sum, item) => sum + item.amount, 0), [expenses, dashboardPeriod.key]);
   const openCharges = useMemo(() => charges.filter(isOpenCharge), [charges]);
   const occupancy = units.filter((unit) => unit.status === 'Ocupada').length;
+  const openMaintenances = useMemo(() => maintenances.filter((item) => !['Concluída', 'Cancelada'].includes(item.status)), [maintenances]);
+  const annualReceipts = useMemo(() => annualMonthlySeries(dashboardPeriod.year, charges, (item) => item.paidAt, (item) => item.type !== 'Caução' && item.status !== 'Cancelada', (item) => item.receivedAmount ?? (item.status === 'Pago' ? item.amount : 0)), [charges, dashboardPeriod.year]);
+  const annualExpenses = useMemo(() => annualMonthlySeries(dashboardPeriod.year, expenses, (item) => item.date, (item) => item.status !== 'Cancelada', (item) => item.amount), [expenses, dashboardPeriod.year]);
 
   const inform = (message) => {
     setNotice(message);
@@ -733,7 +744,7 @@ function App() {
     <main className="main">
       <header><div><p className="eyebrow">{dashboardPeriod.label}</p><h1>{page}</h1></div><button className="import-button" onClick={() => navigate('Conciliação')}>Importar extrato</button></header>
       {notice && <div className="toast">{notice}</div>}
-      {page === 'Visão geral' && <Dashboard income={income} expenses={paidExpenses} periodLabel={dashboardPeriod.label} openCharges={openCharges} occupancy={occupancy} pendingBank={bank.filter((item) => item.state !== 'Conciliada').length} navigate={navigate} />}
+      {page === 'Visão geral' && <Dashboard income={income} expenses={monthlyExpenses} periodLabel={dashboardPeriod.label} annualYear={dashboardPeriod.year} openMaintenances={openMaintenances} annualReceipts={annualReceipts} annualExpenses={annualExpenses} />}
       {page === 'Unidades' && <Units items={units} tenants={tenants} edit={(record) => setRegistrationForm({ type: 'unit', record })} form={registrationForm?.type === 'unit' && <UnitForm record={registrationForm.record} tenants={tenants} onClose={() => setRegistrationForm(null)} onSubmit={saveUnit} />} />}
       {page === 'Contratos' && <Contracts items={contracts} charges={charges} generateCharges={generateContractCharges} edit={(record) => setShowContractForm(record)} openForm={() => setShowContractForm({})} form={showContractForm && <ContractForm record={showContractForm.id ? showContractForm : null} tenants={tenants} units={units} onClose={() => setShowContractForm(null)} onSubmit={saveContract} />} />}
       {page === 'Cobranças' && <Charges items={charges} registerReceipt={setReceiptCharge} manageDeposit={setDepositManagement} edit={setShowChargeForm} cancel={cancelCharge} openForm={() => setShowChargeForm({})} form={<>{showChargeForm && <ChargeForm record={showChargeForm.id ? showChargeForm : null} units={units} onClose={() => setShowChargeForm(null)} onSubmit={saveCharge} />}{receiptCharge && <ReceiptForm charge={receiptCharge} onClose={() => setReceiptCharge(null)} onSubmit={registerReceipt} />}{depositManagement && <DepositManagementForm charge={depositManagement} onClose={() => setDepositManagement(null)} onSubmit={saveDepositManagement} />}</>} />}
@@ -759,27 +770,22 @@ function Authentication({ onLogin }) {
   return <main className="auth-shell"><section className="auth-card"><img src="/logo-cb.png" alt="CB Gestão" /><div><p className="eyebrow">ACESSO RESTRITO</p><h1>Entrar no CB Gestão</h1><p>Use seu nome de usuário e PIN para acessar o sistema.</p></div><form className="form-grid auth-form" onSubmit={submitLogin}><label>Nome de usuário<input name="username" required autoComplete="username" placeholder="Seu usuário" /></label><label>PIN de 6 dígitos<input name="pin" type="password" inputMode="numeric" pattern="[0-9]{6}" required minLength="6" maxLength="6" autoComplete="current-password" placeholder="••••••" /></label>{error && <p className="auth-error">{error}</p>}<button className="solid-small auth-submit">Entrar</button></form><p className="auth-note">Não há cadastro público. Contas e redefinições de PIN são gerenciadas pelo Administrador Geral.</p></section></main>;
 }
 
-function Dashboard({ income, expenses, periodLabel, openCharges, occupancy, pendingBank, navigate }) {
+function Dashboard({ income, expenses, periodLabel, annualYear, openMaintenances, annualReceipts, annualExpenses }) {
   return <>
     <section className="metric-grid">
       <Metric label="Recebido no mês" value={money(income)} hint={`Aluguéis confirmados · ${periodLabel}`} tone="green" />
-      <Metric label="Despesas pagas no mês" value={money(expenses)} hint={`Pagamentos confirmados · ${periodLabel}`} tone="orange" />
-      <Metric label="Resultado de caixa" value={money(income - expenses)} hint={`Recebimentos menos pagamentos · ${periodLabel}`} tone="blue" />
-      <Metric label="Ocupação" value={`${occupancy} de 12`} hint={`${occupancy} unidade(s) ocupada(s)`} tone="purple" />
+      <Metric label="Despesas lançadas no mês" value={money(expenses)} hint={`Lançamentos não cancelados · ${periodLabel}`} tone="orange" />
+      <Metric label="Manutenções em aberto" value={String(openMaintenances.length)} hint="Abertas, em andamento ou aguardando fornecedor" tone="blue" />
     </section>
-    <section className="two-columns">
-      <article className="card"><div className="card-title"><div><p className="eyebrow">CONTAS A RECEBER</p><h2>Próximos vencimentos</h2></div><button className="link-button" onClick={() => navigate('Cobranças')}>Ver todas</button></div>
-        <div className="list">{openCharges.map((item) => <div className="list-row" key={item.id}><div className="unit-icon">{item.unit.slice(-2)}</div><div><b>{item.unit}</b><small>{item.tenant} · vence {item.due}</small></div><div className="right"><b>{money(item.amount)}</b><span className={`badge ${statusClass(item.status)}`}>{item.status}</span></div></div>)}</div>
-      </article>
-      <article className="card"><div className="card-title"><div><p className="eyebrow">ATENÇÃO</p><h2>Para revisar hoje</h2></div></div>
-        <div className="action-box"><span className="action-number">{pendingBank}</span><div><b>{pendingBank ? 'Transações aguardando conciliação' : 'Nenhuma transação pendente'}</b><small>{pendingBank ? 'Importe o extrato ou confirme as sugestões.' : 'Importe o extrato do Banco Inter quando houver movimentações.'}</small></div><button className="solid-small" onClick={() => navigate('Conciliação')}>Conciliar</button></div>
-        <div className="action-box"><span className="action-number amber">{12 - occupancy}</span><div><b>Unidades sem ocupação</b><small>Kitnets 04 e 05 estão vagas na planilha de referência.</small></div><button className="plain-small" onClick={() => navigate('Unidades')}>Ver unidades</button></div>
-      </article>
+    <section className="dashboard-charts">
+      <AnnualBarChart title="Recebimento de aluguéis" year={annualYear} series={annualReceipts} tone="green" />
+      <AnnualBarChart title="Despesas lançadas" year={annualYear} series={annualExpenses} tone="orange" />
     </section>
   </>;
 }
 
 function Metric({ label, value, hint, tone }) { return <article className={`metric ${tone}`}><p>{label}</p><strong>{value}</strong><small>{hint}</small></article>; }
+function AnnualBarChart({ title, year, series, tone }) { const maximum = Math.max(...series.map((item) => item.value), 1); const total = series.reduce((sum, item) => sum + item.value, 0); return <article className="card annual-chart"><div className="card-title"><div><p className="eyebrow">ANO DE {year}</p><h2>{title}</h2><small>Total no ano: {money(total)}</small></div></div><div className="annual-bars" role="img" aria-label={`${title} em ${year}`} >{series.map((item) => <div className="annual-bar-item" key={item.label}><span className="annual-bar-value">{item.value ? money(item.value) : '—'}</span><div className="annual-bar-track"><div className={`annual-bar ${tone}`} style={{ height: `${item.value ? Math.max(5, (item.value / maximum) * 100) : 0}%` }} title={`${item.label}: ${money(item.value)}`} /></div><small>{item.label}</small></div>)}</div></article>; }
 
 function Units({ items, tenants, edit, form }) { return <>{form}<section className="card"><div className="card-title"><div><p className="eyebrow">CADASTRO DO PRÉDIO</p><h2>{items.length} unidades</h2><small>Edite a identificação, contas, IPTU, descrição, fotos e documentos de cada kitnet.</small></div></div><div className="unit-grid">{items.map((unit) => <article className="unit-card" key={unit.id}><div className="unit-card-top"><span className={`status-dot ${statusClass(unit.status)}`}></span><span>{unit.status}</span></div><h3>{unit.name}</h3><p>{unit.tenant}</p><b>{unit.rent ? `${money(unit.rent)}/mês` : 'Sem valor mensal'}</b><small className="unit-doc-count">{unit.attachments?.length || 0} anexo(s) · Cagece: {unit.cagece || '—'}</small><button className="link-button" onClick={() => edit(unit)}>Editar unidade</button></article>)}</div></section></>; }
 
