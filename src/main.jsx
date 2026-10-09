@@ -113,6 +113,18 @@ const parseBrDate = (value) => {
 const parseDate = (value) => String(value).includes('-') ? new Date(`${value}T12:00:00`) : parseBrDate(value);
 const formatBrDate = (value) => value.toLocaleDateString('pt-BR');
 const dateInputValue = () => new Date().toISOString().slice(0, 10);
+const periodKey = (value) => {
+  if (!value) return '';
+  const normalized = dateFieldValue(value);
+  return normalized ? normalized.slice(0, 7) : '';
+};
+const currentPeriod = () => {
+  const now = new Date();
+  return {
+    key: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`,
+    label: new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' }).format(now).toUpperCase(),
+  };
+};
 const timestampLabel = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value));
 const maxAttachmentBytes = 1024 * 1024;
 const storedAttachments = async (files, existing = []) => {
@@ -225,9 +237,9 @@ function App() {
   const signedUser = session?.user?.status === 'Ativo' ? session.user : null;
   const activeProfile = accessProfiles[signedUser?.role];
   const activeUser = signedUser && activeProfile && (activeProfile.status || 'Ativo') === 'Ativo' ? signedUser : null;
-
-  const income = useMemo(() => charges.filter((item) => item.type !== 'Caução').reduce((sum, item) => sum + (item.status === 'Cancelada' ? 0 : item.receivedAmount ?? (item.status === 'Pago' ? item.amount : 0)), 0), [charges]);
-  const paidExpenses = useMemo(() => expenses.filter((item) => item.status !== 'Cancelada').reduce((sum, item) => sum + item.amount, 0), [expenses]);
+  const dashboardPeriod = currentPeriod();
+  const income = useMemo(() => charges.filter((item) => item.type !== 'Caução' && item.status !== 'Cancelada' && periodKey(item.paidAt) === dashboardPeriod.key).reduce((sum, item) => sum + (item.receivedAmount ?? (item.status === 'Pago' ? item.amount : 0)), 0), [charges, dashboardPeriod.key]);
+  const paidExpenses = useMemo(() => expenses.filter((item) => item.status !== 'Cancelada' && periodKey(item.paidAt || item.date) === dashboardPeriod.key).reduce((sum, item) => sum + item.amount, 0), [expenses, dashboardPeriod.key]);
   const openCharges = useMemo(() => charges.filter(isOpenCharge), [charges]);
   const occupancy = units.filter((unit) => unit.status === 'Ocupada').length;
 
@@ -719,9 +731,9 @@ function App() {
       <button className="mobile-logout" onClick={() => { api('/auth/logout', { method: 'POST' }).catch(() => {}); setSession(null); setDataReady(false); }}>Sair</button>
     </aside>
     <main className="main">
-      <header><div><p className="eyebrow">SETEMBRO DE 2026</p><h1>{page}</h1></div><button className="import-button" onClick={() => navigate('Conciliação')}>Importar extrato</button></header>
+      <header><div><p className="eyebrow">{dashboardPeriod.label}</p><h1>{page}</h1></div><button className="import-button" onClick={() => navigate('Conciliação')}>Importar extrato</button></header>
       {notice && <div className="toast">{notice}</div>}
-      {page === 'Visão geral' && <Dashboard income={income} expenses={paidExpenses} openCharges={openCharges} occupancy={occupancy} pendingBank={bank.filter((item) => item.state !== 'Conciliada').length} navigate={navigate} />}
+      {page === 'Visão geral' && <Dashboard income={income} expenses={paidExpenses} periodLabel={dashboardPeriod.label} openCharges={openCharges} occupancy={occupancy} pendingBank={bank.filter((item) => item.state !== 'Conciliada').length} navigate={navigate} />}
       {page === 'Unidades' && <Units items={units} tenants={tenants} edit={(record) => setRegistrationForm({ type: 'unit', record })} form={registrationForm?.type === 'unit' && <UnitForm record={registrationForm.record} tenants={tenants} onClose={() => setRegistrationForm(null)} onSubmit={saveUnit} />} />}
       {page === 'Contratos' && <Contracts items={contracts} charges={charges} generateCharges={generateContractCharges} edit={(record) => setShowContractForm(record)} openForm={() => setShowContractForm({})} form={showContractForm && <ContractForm record={showContractForm.id ? showContractForm : null} tenants={tenants} units={units} onClose={() => setShowContractForm(null)} onSubmit={saveContract} />} />}
       {page === 'Cobranças' && <Charges items={charges} registerReceipt={setReceiptCharge} manageDeposit={setDepositManagement} edit={setShowChargeForm} cancel={cancelCharge} openForm={() => setShowChargeForm({})} form={<>{showChargeForm && <ChargeForm record={showChargeForm.id ? showChargeForm : null} units={units} onClose={() => setShowChargeForm(null)} onSubmit={saveCharge} />}{receiptCharge && <ReceiptForm charge={receiptCharge} onClose={() => setReceiptCharge(null)} onSubmit={registerReceipt} />}{depositManagement && <DepositManagementForm charge={depositManagement} onClose={() => setDepositManagement(null)} onSubmit={saveDepositManagement} />}</>} />}
@@ -747,13 +759,13 @@ function Authentication({ onLogin }) {
   return <main className="auth-shell"><section className="auth-card"><img src="/logo-cb.png" alt="CB Gestão" /><div><p className="eyebrow">ACESSO RESTRITO</p><h1>Entrar no CB Gestão</h1><p>Use seu nome de usuário e PIN para acessar o sistema.</p></div><form className="form-grid auth-form" onSubmit={submitLogin}><label>Nome de usuário<input name="username" required autoComplete="username" placeholder="Seu usuário" /></label><label>PIN de 6 dígitos<input name="pin" type="password" inputMode="numeric" pattern="[0-9]{6}" required minLength="6" maxLength="6" autoComplete="current-password" placeholder="••••••" /></label>{error && <p className="auth-error">{error}</p>}<button className="solid-small auth-submit">Entrar</button></form><p className="auth-note">Não há cadastro público. Contas e redefinições de PIN são gerenciadas pelo Administrador Geral.</p></section></main>;
 }
 
-function Dashboard({ income, expenses, openCharges, occupancy, pendingBank, navigate }) {
+function Dashboard({ income, expenses, periodLabel, openCharges, occupancy, pendingBank, navigate }) {
   return <>
     <section className="metric-grid">
-      <Metric label="Recebido no mês" value={money(income)} hint="Aluguéis confirmados" tone="green" />
-      <Metric label="Despesas lançadas" value={money(expenses)} hint="Manutenção e serviços" tone="orange" />
-      <Metric label="Resultado de caixa" value={money(income - expenses)} hint="Recebimentos menos despesas" tone="blue" />
-      <Metric label="Ocupação" value={`${occupancy} de 12`} hint="2 unidades indisponíveis" tone="purple" />
+      <Metric label="Recebido no mês" value={money(income)} hint={`Aluguéis confirmados · ${periodLabel}`} tone="green" />
+      <Metric label="Despesas pagas no mês" value={money(expenses)} hint={`Pagamentos confirmados · ${periodLabel}`} tone="orange" />
+      <Metric label="Resultado de caixa" value={money(income - expenses)} hint={`Recebimentos menos pagamentos · ${periodLabel}`} tone="blue" />
+      <Metric label="Ocupação" value={`${occupancy} de 12`} hint={`${occupancy} unidade(s) ocupada(s)`} tone="purple" />
     </section>
     <section className="two-columns">
       <article className="card"><div className="card-title"><div><p className="eyebrow">CONTAS A RECEBER</p><h2>Próximos vencimentos</h2></div><button className="link-button" onClick={() => navigate('Cobranças')}>Ver todas</button></div>
