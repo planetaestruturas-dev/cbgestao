@@ -259,11 +259,16 @@ function App() {
   const [bankEdit, setBankEdit] = useState(null);
   const [showTerminationForm, setShowTerminationForm] = useState(null);
   const [tenantProfile, setTenantProfile] = useState(null);
+  const [dashboardDetail, setDashboardDetail] = useState(null);
+  const [expenseMonthFilter, setExpenseMonthFilter] = useState(null);
   const signedUser = session?.user?.status === 'Ativo' ? session.user : null;
   const activeProfile = accessProfiles[signedUser?.role];
   const activeUser = signedUser && activeProfile && (activeProfile.status || 'Ativo') === 'Ativo' ? signedUser : null;
   const dashboardPeriod = currentPeriod();
   const income = useMemo(() => charges.filter((item) => item.type !== 'Caução' && item.status !== 'Cancelada' && periodKey(item.paidAt) === dashboardPeriod.key).reduce((sum, item) => sum + (item.receivedAmount ?? (item.status === 'Pago' ? item.amount : 0)), 0), [charges, dashboardPeriod.key]);
+  const monthlyReceipts = useMemo(() => charges.filter((item) => item.type !== 'Caução' && item.status !== 'Cancelada' && periodKey(item.paidAt) === dashboardPeriod.key), [charges, dashboardPeriod.key]);
+  const monthlyReceivable = useMemo(() => charges.filter((item) => item.type !== 'Caução' && isOpenCharge(item) && periodKey(item.due) === dashboardPeriod.key), [charges, dashboardPeriod.key]);
+  const monthlyReceivableTotal = useMemo(() => monthlyReceivable.reduce((sum, item) => sum + Math.max(0, (Number(item.amount) || 0) - (Number(item.settledAmount) || 0)), 0), [monthlyReceivable]);
   const monthlyExpenses = useMemo(() => expenses.filter((item) => item.status !== 'Cancelada' && periodKey(item.date) === dashboardPeriod.key).reduce((sum, item) => sum + item.amount, 0), [expenses, dashboardPeriod.key]);
   const openCharges = useMemo(() => charges.filter(isOpenCharge), [charges]);
   const occupancy = units.filter((unit) => unit.status === 'Ocupada').length;
@@ -282,6 +287,11 @@ function App() {
     setShowChargeForm(false);
     setReceiptCharge(null);
     setShowExpenseForm(false);
+  };
+  const showMonthlyExpenses = () => {
+    const monthEnd = new Date(dashboardPeriod.year, Number(dashboardPeriod.key.slice(5)), 0).getDate();
+    setExpenseMonthFilter({ start: `${dashboardPeriod.key}-01`, end: `${dashboardPeriod.key}-${String(monthEnd).padStart(2, '0')}` });
+    navigate('Despesas');
   };
 
   const loadAccess = async () => {
@@ -761,18 +771,19 @@ function App() {
     <main className="main">
       <header><div><p className="eyebrow">{dashboardPeriod.label}</p><h1>{page}</h1></div><button className="import-button" onClick={() => navigate('Conciliação')}>Importar extrato</button></header>
       {notice && <div className="toast">{notice}</div>}
-      {page === 'Visão geral' && <Dashboard income={income} expenses={monthlyExpenses} periodLabel={dashboardPeriod.label} annualYear={dashboardPeriod.year} openMaintenances={openMaintenances} annualReceipts={annualReceipts} annualExpenses={annualExpenses} />}
+      {page === 'Visão geral' && <Dashboard income={income} receivable={monthlyReceivableTotal} expenses={monthlyExpenses} periodLabel={dashboardPeriod.label} annualYear={dashboardPeriod.year} openMaintenances={openMaintenances} annualReceipts={annualReceipts} annualExpenses={annualExpenses} showReceipts={() => setDashboardDetail({ type: 'receipts', items: monthlyReceipts })} showReceivable={() => setDashboardDetail({ type: 'receivable', items: monthlyReceivable })} showExpenses={showMonthlyExpenses} />}
       {page === 'Unidades' && <Units items={units} tenants={tenants} edit={(record) => setRegistrationForm({ type: 'unit', record })} form={registrationForm?.type === 'unit' && <UnitForm record={registrationForm.record} tenants={tenants} onClose={() => setRegistrationForm(null)} onSubmit={saveUnit} />} />}
       {page === 'Contratos' && <Contracts items={contracts} charges={charges} generateCharges={generateContractCharges} edit={(record) => setShowContractForm(record)} openForm={() => setShowContractForm({})} form={showContractForm && <ContractForm record={showContractForm.id ? showContractForm : null} tenants={tenants} units={units} onClose={() => setShowContractForm(null)} onSubmit={saveContract} />} />}
       {page === 'Cobranças' && <Charges items={charges} registerReceipt={setReceiptCharge} manageDeposit={setDepositManagement} edit={setShowChargeForm} cancel={cancelCharge} openForm={() => setShowChargeForm({})} form={<>{showChargeForm && <ChargeForm record={showChargeForm.id ? showChargeForm : null} units={units} onClose={() => setShowChargeForm(null)} onSubmit={saveCharge} />}{receiptCharge && <ReceiptForm charge={receiptCharge} onClose={() => setReceiptCharge(null)} onSubmit={registerReceipt} />}{depositManagement && <DepositManagementForm charge={depositManagement} onClose={() => setDepositManagement(null)} onSubmit={saveDepositManagement} />}</>} />}
       {page === 'Conciliação' && <Reconciliation items={bank} confirm={confirmBankItem} edit={setBankEdit} importStatement={importStatement} inform={inform} form={bankEdit && <BankTransactionForm record={bankEdit} onClose={() => setBankEdit(null)} onSubmit={saveBankItem} />} />}
-      {page === 'Despesas' && <Expenses items={expenses} maintenances={maintenances} edit={(record) => setShowExpenseForm(record)} cancel={cancelExpense} openForm={() => setShowExpenseForm({})} form={showExpenseForm && <ExpenseForm record={showExpenseForm.id ? showExpenseForm : null} units={units} categories={expenseCategories} suppliers={suppliers} maintenances={maintenances} onClose={() => setShowExpenseForm(null)} onSubmit={saveExpense} />} />}
+      {page === 'Despesas' && <Expenses items={expenses} maintenances={maintenances} monthFilter={expenseMonthFilter} edit={(record) => setShowExpenseForm(record)} cancel={cancelExpense} openForm={() => setShowExpenseForm({})} form={showExpenseForm && <ExpenseForm record={showExpenseForm.id ? showExpenseForm : null} units={units} categories={expenseCategories} suppliers={suppliers} maintenances={maintenances} onClose={() => setShowExpenseForm(null)} onSubmit={saveExpense} />} />}
       {page === 'Manutenções' && <Maintenances items={maintenances} expenses={expenses} openForm={() => setShowMaintenanceForm({})} edit={setShowMaintenanceForm} showReport={setMaintenanceReport} form={<>{showMaintenanceForm && <MaintenanceForm record={showMaintenanceForm.id ? showMaintenanceForm : null} units={units} onClose={() => setShowMaintenanceForm(null)} onSubmit={saveMaintenance} />}{maintenanceReport && <MaintenanceDetailReport maintenance={maintenanceReport} expenses={expenses.filter((item) => String(item.maintenanceId) === String(maintenanceReport.id))} onClose={() => setMaintenanceReport(null)} />}</>} />}
       {page === 'Distratos' && <Terminations items={terminations} charges={charges} cancel={cancelTermination} openForm={() => setShowTerminationForm({})} edit={setShowTerminationForm} form={showTerminationForm && <TerminationForm record={showTerminationForm.id ? showTerminationForm : null} contracts={contracts} charges={charges} onClose={() => setShowTerminationForm(null)} onSubmit={saveTermination} />} />}
       {page === 'Cadastros' && <Registrations tenants={tenants} contracts={contracts} bankAccounts={bankAccounts} suppliers={suppliers} categories={expenseCategories} users={users} accessProfiles={accessProfiles} isAdministrator={activeUser.role === 'Administrador Geral'} profile={tenantProfile} closeProfile={() => setTenantProfile(null)} openProfile={setTenantProfile} openForm={(type, record = null) => setRegistrationForm({ type, record })} form={registrationForm?.type === 'tenant' ? <TenantForm record={registrationForm.record} onClose={() => setRegistrationForm(null)} onSubmit={saveTenant} /> : registrationForm?.type === 'account' ? <BankAccountForm record={registrationForm.record} onClose={() => setRegistrationForm(null)} onSubmit={saveBankAccount} /> : registrationForm?.type === 'supplier' ? <SupplierForm record={registrationForm.record} onClose={() => setRegistrationForm(null)} onSubmit={saveSupplier} /> : registrationForm?.type === 'category' ? <ExpenseCategoryForm record={registrationForm.record} categories={expenseCategories} onClose={() => setRegistrationForm(null)} onSubmit={saveExpenseCategory} /> : registrationForm?.type === 'user' ? <UserForm record={registrationForm.record} accessProfiles={accessProfiles} onClose={() => setRegistrationForm(null)} onSubmit={saveUser} /> : registrationForm?.type === 'accessProfile' ? <AccessProfileForm record={registrationForm.record} onClose={() => setRegistrationForm(null)} onSubmit={saveAccessProfile} /> : null} />}
       {page === 'Relatórios' && <Reports charges={charges} expenses={expenses} suppliers={suppliers} maintenances={maintenances} units={units} />}
       {page === 'Backups' && <Backups points={restorePoints} createPoint={saveRestorePoint} restorePoint={restorePoint} exportBackup={exportBackup} importBackup={importBackup} migrateLegacyData={migrateLegacyBrowserData} />}
     </main>
+    {dashboardDetail && <DashboardDetailModal detail={dashboardDetail} periodLabel={dashboardPeriod.label} onClose={() => setDashboardDetail(null)} />}
   </div>;
 }
 
@@ -787,11 +798,12 @@ function Authentication({ onLogin }) {
   return <main className="auth-shell"><section className="auth-card"><img src="/logo-cb.png" alt="CB Gestão" /><div><p className="eyebrow">ACESSO RESTRITO</p><h1>Entrar no CB Gestão</h1><p>Use seu nome de usuário e PIN para acessar o sistema.</p></div><form className="form-grid auth-form" onSubmit={submitLogin}><label>Nome de usuário<input name="username" required autoComplete="username" placeholder="Seu usuário" /></label><label>PIN de 6 dígitos<input name="pin" type="password" inputMode="numeric" pattern="[0-9]{6}" required minLength="6" maxLength="6" autoComplete="current-password" placeholder="••••••" /></label>{error && <p className="auth-error">{error}</p>}<button className="solid-small auth-submit">Entrar</button></form><p className="auth-note">Não há cadastro público. Contas e redefinições de PIN são gerenciadas pelo Administrador Geral.</p></section></main>;
 }
 
-function Dashboard({ income, expenses, periodLabel, annualYear, openMaintenances, annualReceipts, annualExpenses }) {
+function Dashboard({ income, receivable, expenses, periodLabel, annualYear, openMaintenances, annualReceipts, annualExpenses, showReceipts, showReceivable, showExpenses }) {
   return <>
     <section className="metric-grid">
-      <Metric label="Recebido no mês" value={money(income)} hint={`Aluguéis confirmados · ${periodLabel}`} tone="green" />
-      <Metric label="Despesas lançadas no mês" value={money(expenses)} hint={`Lançamentos não cancelados · ${periodLabel}`} tone="orange" />
+      <Metric label="Recebido no mês" value={money(income)} hint={`Aluguéis confirmados · ${periodLabel}`} tone="green" onClick={showReceipts} />
+      <Metric label="A receber no mês" value={money(receivable)} hint={`Cobranças com vencimento em ${periodLabel}`} tone="purple" onClick={showReceivable} />
+      <Metric label="Despesas lançadas no mês" value={money(expenses)} hint={`Lançamentos não cancelados · ${periodLabel}`} tone="orange" onClick={showExpenses} />
       <Metric label="Manutenções em aberto" value={String(openMaintenances.length)} hint="Abertas, em andamento ou aguardando fornecedor" tone="blue" />
     </section>
     <section className="dashboard-charts">
@@ -801,7 +813,16 @@ function Dashboard({ income, expenses, periodLabel, annualYear, openMaintenances
   </>;
 }
 
-function Metric({ label, value, hint, tone }) { return <article className={`metric ${tone}`}><p>{label}</p><strong>{value}</strong><small>{hint}</small></article>; }
+function Metric({ label, value, hint, tone, onClick }) { return <article className={`metric ${tone} ${onClick ? 'metric-action' : ''}`} onClick={onClick} onKeyDown={(event) => { if (onClick && ['Enter', ' '].includes(event.key)) onClick(); }} role={onClick ? 'button' : undefined} tabIndex={onClick ? 0 : undefined}><p>{label}</p><strong>{value}</strong><small>{hint}{onClick && <em>Ver detalhes →</em>}</small></article>; }
+function DashboardDetailModal({ detail, periodLabel, onClose }) {
+  const isReceipt = detail.type === 'receipts';
+  const title = isReceipt ? `Recebido em ${periodLabel}` : `A receber em ${periodLabel}`;
+  const rows = detail.items.map((item) => isReceipt
+    ? [item.unit, item.tenant, item.paidAt || '—', item.type || 'Aluguel', money(item.receivedAmount ?? item.amount)]
+    : [item.unit, item.tenant, item.due, item.type || 'Aluguel', money(Math.max(0, (Number(item.amount) || 0) - (Number(item.settledAmount) || 0))), item.status]);
+  const headers = isReceipt ? ['Unidade', 'Inquilino', 'Recebido em', 'Referência', 'Valor recebido'] : ['Unidade', 'Inquilino', 'Vencimento', 'Referência', 'Saldo a receber', 'Situação'];
+  return <Modal title={title} onClose={onClose}><p className="form-note">{detail.items.length} cobrança(s) encontrada(s) no período.</p>{detail.items.length ? <Table headers={headers} rows={rows} /> : <p className="muted">Não há cobranças para detalhar neste período.</p>}<div className="form-actions"><button className="solid-small" onClick={onClose}>Fechar</button></div></Modal>;
+}
 function AnnualBarChart({ title, year, series, tone }) { const maximum = Math.max(...series.map((item) => item.value), 1); const total = series.reduce((sum, item) => sum + item.value, 0); return <article className="card annual-chart"><div className="card-title"><div><p className="eyebrow">ANO DE {year}</p><h2>{title}</h2><small>Total no ano: {money(total)}</small></div></div><div className="annual-bars" role="img" aria-label={`${title} em ${year}`} >{series.map((item) => <div className="annual-bar-item" key={item.label}><span className="annual-bar-value">{item.value ? money(item.value) : '—'}</span><div className="annual-bar-track"><div className={`annual-bar ${tone}`} style={{ height: `${item.value ? Math.max(5, (item.value / maximum) * 100) : 0}%` }} title={`${item.label}: ${money(item.value)}`} /></div><small>{item.label}</small></div>)}</div></article>; }
 
 function Units({ items, tenants, edit, form }) { return <>{form}<section className="card"><div className="card-title"><div><p className="eyebrow">CADASTRO DO PRÉDIO</p><h2>{items.length} unidades</h2><small>Edite a identificação, contas, IPTU, descrição, fotos e documentos de cada kitnet.</small></div></div><div className="unit-grid">{items.map((unit) => <article className="unit-card" key={unit.id}><div className="unit-card-top"><span className={`status-dot ${statusClass(unit.status)}`}></span><span>{unit.status}</span></div><h3>{unit.name}</h3><p>{unit.tenant}</p><b>{unit.rent ? `${money(unit.rent)}/mês` : 'Sem valor mensal'}</b><small className="unit-doc-count">{unit.attachments?.length || 0} anexo(s) · Cagece: {unit.cagece || '—'}</small><button className="link-button" onClick={() => edit(unit)}>Editar unidade</button></article>)}</div></section></>; }
@@ -823,9 +844,12 @@ function Charges({ items, registerReceipt, manageDeposit, edit, cancel, openForm
 
 function Reconciliation({ items, confirm, edit, importStatement, form }) { return <>{form}<section className="card"><div className="card-title"><div><p className="eyebrow">BANCO INTER</p><h2>Conciliação bancária</h2><small>Importe um CSV com as colunas Data, Descrição e Valor. As transações entram como pendentes para conferência.</small></div><label className="solid-small file-input">Selecionar CSV<input type="file" accept=".csv,text/csv" onChange={importStatement} /></label></div><div className="reconciliation-list">{items.map((item) => <article className="bank-row" key={item.id}><div className={`direction ${item.direction === 'Crédito' ? 'credit' : 'debit'}`}>{item.direction === 'Crédito' ? '↓' : '↑'}</div><div className="bank-main"><b>{item.description}</b><small>{item.date} · {item.direction}</small></div><div className="suggestion">{item.suggestion ? <><small>Sugestão</small><b>{item.suggestion}</b></> : <span className="badge pendente">Sem sugestão</span>}</div><div className="right"><b>{money(item.amount)}</b><span className={`badge ${statusClass(item.state)}`}>{item.state}</span></div><div className="bank-actions">{item.state === 'Sugerida' && <button className="solid-small" onClick={() => confirm(item.id)}>Confirmar</button>}<button className="plain-small" onClick={() => edit(item)}>Editar</button></div></article>)}</div></section></>; }
 
-function Expenses({ items, maintenances, openForm, edit, cancel, form }) {
+function Expenses({ items, maintenances, monthFilter, openForm, edit, cancel, form }) {
   const [filters, setFilters] = useState({ start: '', end: '', category: '' });
   const [sort, setSort] = useState({ key: 'date', direction: 'desc' });
+  useEffect(() => {
+    if (monthFilter?.start && monthFilter?.end) setFilters((current) => ({ ...current, start: monthFilter.start, end: monthFilter.end }));
+  }, [monthFilter?.start, monthFilter?.end]);
   let filtered = items.filter((item) => inRange(dateToIso(item.date), filters.start, filters.end) && (!filters.category || item.category === filters.category));
   const maintenanceName = (item) => maintenances.find((maintenance) => String(maintenance.id) === String(item.maintenanceId))?.title || 'Não vinculada';
   const sorted = sortRecords(filtered, sort, (item, key) => ({ date: dateToIso(item.date), dueDate: item.dueDate ? dateToIso(item.dueDate) : '', paidAt: item.paidAt ? dateToIso(item.paidAt) : '', description: item.description, supplier: item.supplier, maintenance: maintenanceName(item), unit: item.unit, category: item.category, amount: Number(item.amount) || 0, status: item.status })[key]);
