@@ -75,6 +75,11 @@ const defaultAccessProfiles = {
 };
 
 const money = (value) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const compactMoney = (value) => {
+  const amount = Number(value) || 0;
+  if (amount >= 1000) return `R$ ${(amount / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mil`;
+  return money(amount);
+};
 const currencyValue = (value) => {
   if (typeof value === 'number') return value;
   const digits = String(value ?? '').replace(/\D/g, '');
@@ -823,7 +828,7 @@ function DashboardDetailModal({ detail, periodLabel, onClose }) {
   const headers = isReceipt ? ['Unidade', 'Inquilino', 'Recebido em', 'Referência', 'Valor recebido'] : ['Unidade', 'Inquilino', 'Vencimento', 'Referência', 'Saldo a receber', 'Situação'];
   return <Modal title={title} onClose={onClose}><p className="form-note">{detail.items.length} cobrança(s) encontrada(s) no período.</p>{detail.items.length ? <Table headers={headers} rows={rows} /> : <p className="muted">Não há cobranças para detalhar neste período.</p>}<div className="form-actions"><button className="solid-small" onClick={onClose}>Fechar</button></div></Modal>;
 }
-function AnnualBarChart({ title, year, series, tone }) { const maximum = Math.max(...series.map((item) => item.value), 1); const total = series.reduce((sum, item) => sum + item.value, 0); return <article className="card annual-chart"><div className="card-title"><div><p className="eyebrow">ANO DE {year}</p><h2>{title}</h2><small>Total no ano: {money(total)}</small></div></div><div className="annual-bars" role="img" aria-label={`${title} em ${year}`} >{series.map((item) => <div className="annual-bar-item" key={item.label}><span className="annual-bar-value">{item.value ? money(item.value) : '—'}</span><div className="annual-bar-track"><div className={`annual-bar ${tone}`} style={{ height: `${item.value ? Math.max(5, (item.value / maximum) * 100) : 0}%` }} title={`${item.label}: ${money(item.value)}`} /></div><small>{item.label}</small></div>)}</div></article>; }
+function AnnualBarChart({ title, year, series, tone }) { const maximum = Math.max(...series.map((item) => item.value), 1); const total = series.reduce((sum, item) => sum + item.value, 0); return <article className="card annual-chart"><div className="card-title"><div><p className="eyebrow">ANO DE {year}</p><h2>{title}</h2><small>Total no ano: {money(total)}</small></div></div><div className="annual-bars" role="img" aria-label={`${title} em ${year}`} >{series.map((item) => <div className="annual-bar-item" key={item.label}><span className="annual-bar-value" title={money(item.value)}>{item.value ? compactMoney(item.value) : '—'}</span><div className="annual-bar-track"><div className={`annual-bar ${tone}`} style={{ height: `${item.value ? Math.max(5, (item.value / maximum) * 100) : 0}%` }} title={`${item.label}: ${money(item.value)}`} /></div><small>{item.label}</small></div>)}</div><div className="annual-values" aria-label={`Valores mensais de ${title}`}>{series.map((item) => <div key={item.label}><b>{item.label}</b><span>{money(item.value)}</span></div>)}</div></article>; }
 
 function Units({ items, tenants, edit, form }) { return <>{form}<section className="card"><div className="card-title"><div><p className="eyebrow">CADASTRO DO PRÉDIO</p><h2>{items.length} unidades</h2><small>Edite a identificação, contas, IPTU, descrição, fotos e documentos de cada kitnet.</small></div></div><div className="unit-grid">{items.map((unit) => <article className="unit-card" key={unit.id}><div className="unit-card-top"><span className={`status-dot ${statusClass(unit.status)}`}></span><span>{unit.status}</span></div><h3>{unit.name}</h3><p>{unit.tenant}</p><b>{unit.rent ? `${money(unit.rent)}/mês` : 'Sem valor mensal'}</b><small className="unit-doc-count">{unit.attachments?.length || 0} anexo(s) · Cagece: {unit.cagece || '—'}</small><button className="link-button" onClick={() => edit(unit)}>Editar unidade</button></article>)}</div></section></>; }
 
