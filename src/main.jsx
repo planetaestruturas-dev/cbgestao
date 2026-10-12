@@ -774,7 +774,7 @@ function App() {
       <button className="mobile-logout" onClick={() => { api('/auth/logout', { method: 'POST' }).catch(() => {}); setSession(null); setDataReady(false); }}>Sair</button>
     </aside>
     <main className="main">
-      <header><div><p className="eyebrow">{dashboardPeriod.label}</p><h1>{page}</h1></div><button className="import-button" onClick={() => navigate('Conciliação')}>Importar extrato</button></header>
+      <header><div><p className="eyebrow">{dashboardPeriod.label}</p><h1>{page}</h1></div>{page !== 'Visão geral' && <button className="import-button" onClick={() => navigate('Conciliação')}>Importar extrato</button>}</header>
       {notice && <div className="toast">{notice}</div>}
       {page === 'Visão geral' && <Dashboard income={income} receivable={monthlyReceivableTotal} expenses={monthlyExpenses} periodLabel={dashboardPeriod.label} annualYear={dashboardPeriod.year} openMaintenances={openMaintenances} annualReceipts={annualReceipts} annualExpenses={annualExpenses} showReceipts={() => setDashboardDetail({ type: 'receipts', items: monthlyReceipts })} showReceivable={() => setDashboardDetail({ type: 'receivable', items: monthlyReceivable })} showExpenses={showMonthlyExpenses} />}
       {page === 'Unidades' && <Units items={units} tenants={tenants} edit={(record) => setRegistrationForm({ type: 'unit', record })} form={registrationForm?.type === 'unit' && <UnitForm record={registrationForm.record} tenants={tenants} onClose={() => setRegistrationForm(null)} onSubmit={saveUnit} />} />}
